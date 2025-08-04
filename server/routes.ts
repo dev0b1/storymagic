@@ -23,31 +23,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { text, character, userId } = generateStoryRequestSchema.parse(req.body);
       
+      // Get user to check limits
+      const user = userId ? await storage.getUser(userId) : null;
+      const isPremium = user?.isPremium === "true";
+      
+      // Text length limits
+      const maxLength = isPremium ? 20000 : 600; // Pro: 20k characters, Free: 600 characters
+      if (text.length > maxLength) {
+        return res.status(400).json({ 
+          message: `Text too long. ${isPremium ? 'Premium' : 'Free'} users are limited to ${maxLength} characters. Your text is ${text.length} characters.` 
+        });
+      }
+      
       // Check story limits for non-premium users
-      if (userId) {
-        const user = await storage.getUser(userId);
-        if (user) {
-          const storiesCount = parseInt(user.storiesGenerated || "0");
-          const isPremium = user.isPremium === "true";
-          
-          if (!isPremium && storiesCount >= 2) {
-            return res.status(403).json({ 
-              message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
-              code: 'LIMIT_REACHED'
-            });
-          }
+      if (userId && user) {
+        const storiesCount = parseInt(user.storiesGenerated || "0");
+        
+        if (!isPremium && storiesCount >= 2) {
+          return res.status(403).json({ 
+            message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
+            code: 'LIMIT_REACHED'
+          });
         }
       }
       
-      // Character personas for AI prompt
+      // Enhanced character personalities with context-aware prompts
       const characterPersonas = {
-        lumi: "You are Lumi the Owl, a wise and calm storyteller. You speak with gentle wisdom and use nature metaphors. Your stories are thoughtful and educational, but always magical and enchanting.",
-        spark: "You are Sir Spark the Fox, a cheeky and energetic storyteller. You're playful, use humor, and tell fast-paced adventures with lots of action and surprises.",
-        bella: "You are Bella the Bot, a curious and cheerful storyteller. You're enthusiastic about discovery, ask wonder-filled questions, and explain things with joy and excitement."
+        lumi: "You are Lumi the Owl, a calm, wise, and educational storyteller who explains deep ideas clearly.",
+        spark: "You are Sir Spark the Fox, a bold and poetic storyteller who speaks in rhyme and loves action.",
+        bella: "You are Bella the Bot, a fast, funny, cheeky storyteller who loves wild imagination."
       };
 
-      // Create system prompt with character persona
-      const systemPrompt = `${characterPersonas[character]} Rewrite the following content as a magical children's story (3-5 paragraphs). Make it whimsical, engaging, and appropriate for children aged 5-12. Include magical elements and maintain your character's unique voice and personality.`;
+      // Create enhanced system prompt with character persona
+      const systemPrompt = `${characterPersonas[character]}
+Take the following user text and turn it into a short magical story with a magical style.
+Make the story engaging and optionally include a subtle life lesson.
+Keep the story under 400 words.`;
 
       // Call OpenRouter API
       const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -59,12 +70,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'X-Title': 'Story Whirl'
         },
         body: JSON.stringify({
-          model: 'anthropic/claude-3-haiku',
+          model: 'mistralai/mistral-small-3.2-24b-instruct:free',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: text }
+            { role: 'user', content: `User input: "${text}"` }
           ],
-          max_tokens: 1000,
+          max_tokens: 600,
           temperature: 0.8
         })
       });

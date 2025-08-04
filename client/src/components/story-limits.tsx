@@ -95,15 +95,15 @@ export function StoryLimits({ storiesGenerated, isPremium, maxStories }: StoryLi
             </div>
             <div className="flex items-center space-x-1">
               <Sparkles className="w-3 h-3" />
+              <span>20k character limit</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Sparkles className="w-3 h-3" />
               <span>Audio narration</span>
             </div>
             <div className="flex items-center space-x-1">
               <Sparkles className="w-3 h-3" />
-              <span>Background music</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Sparkles className="w-3 h-3" />
-              <span>Story downloads</span>
+              <span>Magic backgrounds</span>
             </div>
           </div>
         </div>

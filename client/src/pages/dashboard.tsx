@@ -208,18 +208,31 @@ export default function Dashboard() {
                 </div>
               </div>
               
-              <Textarea
-                placeholder="Paste your text, summary, or content here... 
+              <div className="relative">
+                <Textarea
+                  placeholder={`Paste your text, summary, or content here... 
 ✨ Try pasting:
 • A book summary
 • A news article 
 • A Wikipedia page
-• Any text you want transformed!"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className="w-full h-40 p-4 border border-purple-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
-                data-testid="textarea-input"
-              />
+• Any text you want transformed!
+
+${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free: Up to 600 characters"}`}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  className={`w-full h-40 p-4 border ${inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600) ? 'border-red-400' : 'border-purple-200'} rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300`}
+                  data-testid="textarea-input"
+                />
+                <div className={`absolute bottom-2 right-2 text-xs px-2 py-1 rounded-full ${
+                  inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600) 
+                    ? 'bg-red-100 text-red-700' 
+                    : inputText.length > (userDetails?.isPremium === "true" ? 18000 : 500)
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {inputText.length}/{userDetails?.isPremium === "true" ? "20,000" : "600"}
+                </div>
+              </div>
               
               {/* Character Selection */}
               <div className="mt-6">
@@ -238,7 +251,11 @@ export default function Dashboard() {
               
               <Button
                 onClick={handleGenerateStory}
-                disabled={generateStoryMutation.isPending || !inputText.trim()}
+                disabled={
+                  generateStoryMutation.isPending || 
+                  !inputText.trim() || 
+                  inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600)
+                }
                 className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 data-testid="button-generate-story"
               >

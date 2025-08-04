@@ -15,6 +15,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
   const [currentParagraph, setCurrentParagraph] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [showMagicalBackground, setShowMagicalBackground] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
 
@@ -67,9 +68,11 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
     if (audioUrl && audioRef.current) {
       audioRef.current.play();
       setIsPlaying(true);
+      setShowMagicalBackground(true);
     } else {
       // Text-based reading simulation
       setIsPlaying(true);
+      setShowMagicalBackground(true);
       simulateReading();
     }
   };
@@ -79,6 +82,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
       audioRef.current.pause();
     }
     setIsPlaying(false);
+    setShowMagicalBackground(false);
   };
 
   const simulateReading = () => {
@@ -91,6 +95,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
       } else {
         setIsPlaying(false);
         setCurrentParagraph(0);
+        setShowMagicalBackground(false);
         clearInterval(interval);
       }
     }, 3000); // 3 seconds per paragraph
@@ -110,6 +115,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
       audioRef.current.onended = () => {
         setIsPlaying(false);
         setCurrentParagraph(0);
+        setShowMagicalBackground(false);
       };
     }
   }, [audioUrl]);
@@ -169,15 +175,30 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
         )}
       </div>
 
-      {/* Story Text with Auto-scroll */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg max-h-96 overflow-y-auto">
-        <div className="space-y-4">
+      {/* Story Text with Auto-scroll and Magical Background */}
+      <div className={`relative overflow-hidden rounded-2xl p-6 shadow-lg max-h-96 overflow-y-auto transition-all duration-1000 ${
+        showMagicalBackground 
+          ? 'bg-gradient-to-br from-purple-100 via-pink-50 to-indigo-100' 
+          : 'bg-white/80 backdrop-blur-sm'
+      }`}>
+        {/* Magical sparkles during storytelling */}
+        {showMagicalBackground && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-4 left-4 w-2 h-2 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
+            <div className="absolute top-12 right-8 w-1 h-1 bg-purple-400 rounded-full animate-bounce opacity-60" style={{ animationDelay: '0.5s' }}></div>
+            <div className="absolute bottom-8 left-12 w-1.5 h-1.5 bg-pink-400 rounded-full animate-pulse opacity-70" style={{ animationDelay: '1s' }}></div>
+            <div className="absolute bottom-4 right-4 w-1 h-1 bg-indigo-400 rounded-full animate-ping opacity-65" style={{ animationDelay: '1.5s' }}></div>
+            <div className="absolute top-20 left-1/2 w-1 h-1 bg-green-400 rounded-full animate-bounce opacity-60" style={{ animationDelay: '2s' }}></div>
+          </div>
+        )}
+        
+        <div className="relative z-10 space-y-4">
           {paragraphs.map((paragraph, index) => (
             <p
               key={index}
               className={`text-gray-800 leading-relaxed text-lg transition-all duration-500 ${
                 isPlaying && currentParagraph === index
-                  ? 'bg-yellow-100 p-3 rounded-lg border-l-4 border-yellow-400 transform scale-105'
+                  ? 'bg-yellow-100/90 p-3 rounded-lg border-l-4 border-yellow-400 transform scale-105 shadow-md'
                   : 'opacity-70 hover:opacity-100'
               }`}
               data-testid={`paragraph-${index}`}
