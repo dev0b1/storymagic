@@ -172,7 +172,7 @@ Keep the story under 400 words.`;
     }
   });
 
-  // Generate audio for story
+  // Generate audio for story with multiple TTS providers
   app.post("/api/story/:id/audio", async (req, res) => {
     try {
       const { id } = req.params;
@@ -190,20 +190,61 @@ Keep the story under 400 words.`;
         return res.status(404).json({ message: 'Story not found' });
       }
 
-      // Character voice settings
-      const voiceSettings = {
-        lumi: { voice: "alloy", speed: 0.9 },
-        spark: { voice: "echo", speed: 1.1 },
-        bella: { voice: "nova", speed: 1.0 }
-      };
-
-      const settings = voiceSettings[story.character as keyof typeof voiceSettings] || voiceSettings.lumi;
-
-      // Generate TTS using OpenAI (if we have OpenAI key, otherwise return placeholder)
       let audioUrl = null;
-      if (process.env.OPENAI_API_KEY) {
+      let provider = 'none';
+
+      // Try ElevenLabs first (premium quality)
+      if (process.env.ELEVENLABS_API_KEY) {
         try {
+          const elevenLabsVoices = {
+            lumi: 'pNInz6obpgDQGcFmaJgB', // Alice - calm, clear
+            spark: '21m00Tcm4TlvDq8ikWAM', // Rachel - energetic
+            bella: 'AZnzlk1XvdvUeBnXmlld' // Domi - playful
+          };
+
+          const voiceId = elevenLabsVoices[story.character as keyof typeof elevenLabsVoices] || elevenLabsVoices.lumi;
+          
+          const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'audio/mpeg',
+              'Content-Type': 'application/json',
+              'xi-api-key': process.env.ELEVENLABS_API_KEY
+            },
+            body: JSON.stringify({
+              text: story.outputStory,
+              model_id: 'eleven_monolingual_v1',
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.5,
+                style: 0.0,
+                use_speaker_boost: true
+              }
+            })
+          });
+
+          if (elevenLabsResponse.ok) {
+            const audioBuffer = await elevenLabsResponse.arrayBuffer();
+            audioUrl = `data:audio/mpeg;base64,${Buffer.from(audioBuffer).toString('base64')}`;
+            provider = 'elevenlabs';
+          }
+        } catch (error) {
+          console.error('ElevenLabs TTS error:', error);
+        }
+      }
+
+      // Fallback to OpenAI TTS
+      if (!audioUrl && process.env.OPENAI_API_KEY) {
+        try {
+          const voiceSettings = {
+            lumi: { voice: "alloy", speed: 0.9 },
+            spark: { voice: "echo", speed: 1.1 },
+            bella: { voice: "nova", speed: 1.0 }
+          };
+          
+          const settings = voiceSettings[story.character as keyof typeof voiceSettings] || voiceSettings.lumi;
           const openaiClient = getOpenAIClient();
+          
           const mp3 = await openaiClient.audio.speech.create({
             model: "tts-1",
             voice: settings.voice as any,
@@ -212,21 +253,17 @@ Keep the story under 400 words.`;
           });
 
           const buffer = Buffer.from(await mp3.arrayBuffer());
-          const audioId = `audio_${Date.now()}_${story.id}`;
-          
-          // In a real app, you'd upload to cloud storage
-          // For now, we'll create a data URL
           audioUrl = `data:audio/mp3;base64,${buffer.toString('base64')}`;
-          
+          provider = 'openai';
         } catch (error) {
-          console.error('TTS generation error:', error);
-          // Return success but no audio if TTS fails
+          console.error('OpenAI TTS error:', error);
         }
       }
 
       res.json({ 
         audioUrl,
-        message: audioUrl ? 'Audio generated successfully' : 'Audio generation not available'
+        provider,
+        message: audioUrl ? `Audio generated successfully using ${provider}` : 'Audio generation not available - missing API keys'
       });
 
     } catch (error) {

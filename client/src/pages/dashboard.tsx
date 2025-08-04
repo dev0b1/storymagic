@@ -7,12 +7,12 @@ import { MagicSparkles } from '@/components/ui/magic-sparkles';
 import { WhimsicalBackground, getStoryTheme } from '@/components/ui/whimsical-backgrounds';
 import { CharacterCard, CHARACTERS } from '@/components/character-card';
 import { StoryReader } from '@/components/story-reader';
-import { StoryLimits } from '@/components/story-limits';
+import { LogOut, Plus, Sparkles, FileText, Settings, Crown } from 'lucide-react';
 import { authService, type User } from '@/lib/auth';
 import { storyService } from '@/lib/openrouter';
 import type { Story } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, LogOut, Sparkles, Plus, FileText, Crown } from 'lucide-react';
+
 import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -207,14 +207,6 @@ export default function Dashboard() {
         <div className="flex-1 flex overflow-hidden">
           {/* Left Side - Input and Controls */}
           <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
-            {/* Story Limits */}
-            {userDetails && (
-              <StoryLimits 
-                storiesGenerated={parseInt(userDetails.storiesGenerated || "0")}
-                isPremium={userDetails.isPremium === "true"}
-                maxStories={2}
-              />
-            )}
 
             {/* Input Section */}
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
@@ -266,28 +258,47 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
                   </div>
                 </div>
                 
-                <Button
-                  onClick={handleGenerateStory}
-                  disabled={
-                    generateStoryMutation.isPending || 
-                    !inputText.trim() || 
-                    inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600)
-                  }
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  data-testid="button-generate-story"
-                >
-                  {generateStoryMutation.isPending ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Weaving Magic...
+                {/* Stories Remaining and Generate Button */}
+                <div className="space-y-3">
+                  {userDetails && userDetails.isPremium !== "true" && (
+                    <div className="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                      <span className="text-sm text-purple-700">
+                        Stories remaining: <strong>{Math.max(0, 2 - parseInt(userDetails.storiesGenerated || "0"))}</strong> of 2
+                      </span>
+                      <Button
+                        size="sm"
+                        className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300"
+                      >
+                        <Crown className="w-3 h-3 mr-1" />
+                        Upgrade Pro
+                      </Button>
                     </div>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Generate Magical Story
-                    </>
                   )}
-                </Button>
+                  
+                  <Button
+                    onClick={handleGenerateStory}
+                    disabled={
+                      generateStoryMutation.isPending || 
+                      !inputText.trim() || 
+                      inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600) ||
+                      (userDetails && userDetails.isPremium !== "true" && parseInt(userDetails.storiesGenerated || "0") >= 2)
+                    }
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    data-testid="button-generate-story"
+                  >
+                    {generateStoryMutation.isPending ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Weaving Magic...
+                      </div>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate Magical Story
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
