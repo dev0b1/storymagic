@@ -1,6 +1,17 @@
 # Overview
 
-StoryMagic AI is a full-stack web application that transforms plain text into whimsical, narrated children's stories using AI. Users can input any text, select from three distinct storytelling characters (Lumi the Owl, Sir Spark the Fox, or Bella the Bot), and receive a magical story adaptation. The application features a fantasy-themed UI with magical animations, user authentication via Supabase, and AI-powered story generation through OpenRouter API.
+Story Whirl is a full-stack web application that transforms plain text into whimsical, narrated children's stories using AI. Users can input any text, select from three distinct storytelling characters (Lumi the Owl, Sir Spark the Fox, or Bella the Bot), and receive a magical story adaptation with optional audio narration. The application features a fantasy-themed UI with magical animations, user authentication via Replit Auth, and AI-powered story generation through OpenRouter API.
+
+## Recent Updates (2025-01-04)
+
+- **App Rebranding**: Renamed from "StoryMagic AI" to "Story Whirl"
+- **Authentication Migration**: Replaced Supabase Auth with Replit Auth for better reliability
+- **Story Limits Implementation**: Free users limited to 2 stories, premium users unlimited
+- **Audio Features**: Added text-to-speech narration with character-specific voices
+- **Enhanced Story Reading**: Auto-scrolling story display with paragraph highlighting
+- **Demo Account**: Added demo@gmail.com for easy testing
+- **Database Migration**: Updated schema to support premium features and story limits
+- **UI/UX Improvements**: Fixed image display, enhanced navigation, added progress indicators
 
 # User Preferences
 
@@ -35,21 +46,25 @@ The application uses a hybrid storage approach:
 - **Development Storage**: In-memory storage implementation for development/testing
 
 ## Authentication and Authorization
-Authentication is handled through Supabase Auth:
+Authentication is handled through Replit Auth and simple session management:
 
-- **Magic Link Authentication**: Email-based passwordless login
-- **Session Management**: Supabase client handles token management
+- **Magic Link Authentication**: Email-based passwordless login (simulated for development)
+- **Demo Account**: demo@gmail.com available for instant testing
+- **Session Management**: LocalStorage-based session handling
 - **Route Protection**: Client-side route guards redirect unauthenticated users
-- **User State**: React context and hooks manage authentication state
+- **User State**: Simple auth service manages authentication state
 
 # External Dependencies
 
 ## AI Services
 - **OpenRouter API**: Primary AI service for story generation using Anthropic's Claude-3-Haiku model
 - **Model Configuration**: Configured for creative writing with temperature 0.8 and character persona system prompts
+- **Text-to-Speech**: OpenAI TTS integration for audio narration with character-specific voices
+- **Story Features**: Auto-scrolling text display, audio generation, MP3 downloads
 
 ## Authentication Services
-- **Supabase**: Complete authentication solution with magic link email authentication, user management, and session handling
+- **Replit Auth**: Integrated authentication solution with simplified user management
+- **Demo Authentication**: Instant demo account access for testing
 
 ## Database Services
 - **Neon Database**: PostgreSQL-compatible serverless database for production

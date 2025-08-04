@@ -14,7 +14,7 @@ export default function Landing() {
           <div className="flex items-center space-x-2">
             <Sparkles className="text-2xl text-purple-600 animate-bounce" />
             <h1 className="font-magical text-2xl text-purple-800" style={{ textShadow: '0 0 10px rgba(147, 51, 234, 0.5)' }}>
-              StoryMagic AI
+              Story Whirl
             </h1>
           </div>
           <Link href="/auth">
@@ -28,11 +28,12 @@ export default function Landing() {
         {/* Hero Section */}
         <div className="max-w-6xl mx-auto px-6 py-20 text-center">
           <div className="mb-8 relative">
-            <img 
-              src="https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
-              alt="Magical forest with ethereal lighting" 
-              className="rounded-3xl shadow-2xl w-full h-64 object-cover opacity-80 mx-auto"
-            />
+            <div className="rounded-3xl shadow-2xl w-full h-64 bg-gradient-to-br from-purple-400 via-pink-300 to-indigo-300 flex items-center justify-center opacity-90 mx-auto">
+              <div className="text-center text-white">
+                <div className="text-6xl mb-4">🌟✨🦉</div>
+                <p className="text-xl font-magical">Magical Forest of Stories</p>
+              </div>
+            </div>
             <div className="absolute inset-0 bg-gradient-to-t from-purple-900/30 to-transparent rounded-3xl"></div>
           </div>
           

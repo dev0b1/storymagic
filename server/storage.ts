@@ -5,6 +5,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User>;
   getUserStories(userId: string, limit?: number): Promise<Story[]>;
   createStory(story: InsertStory): Promise<Story>;
 }
@@ -33,6 +34,8 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser,
       name: insertUser.name || null,
+      isPremium: insertUser.isPremium || "false",
+      storiesGenerated: insertUser.storiesGenerated || "0",
       id,
       createdAt: new Date()
     };
@@ -48,10 +51,21 @@ export class MemStorage implements IStorage {
     return userStories;
   }
 
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const existingUser = this.users.get(id);
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
+    const updatedUser = { ...existingUser, ...updates };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
   async createStory(insertStory: InsertStory): Promise<Story> {
     const id = randomUUID();
     const story: Story = {
       ...insertStory,
+      audioUrl: insertStory.audioUrl || null,
       id,
       createdAt: new Date()
     };

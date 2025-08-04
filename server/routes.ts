@@ -3,6 +3,13 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertStorySchema } from "@shared/schema";
 import { z } from "zod";
+import OpenAI from "openai";
+
+// Configure OpenAI for TTS
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY,
+  baseURL: process.env.OPENAI_API_KEY ? undefined : "https://openrouter.ai/api/v1"
+});
 
 const generateStoryRequestSchema = z.object({
   text: z.string().min(1),
@@ -11,10 +18,26 @@ const generateStoryRequestSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Generate story endpoint
+  // Generate story endpoint with limits
   app.post("/api/story", async (req, res) => {
     try {
       const { text, character, userId } = generateStoryRequestSchema.parse(req.body);
+      
+      // Check story limits for non-premium users
+      if (userId) {
+        const user = await storage.getUser(userId);
+        if (user) {
+          const storiesCount = parseInt(user.storiesGenerated || "0");
+          const isPremium = user.isPremium === "true";
+          
+          if (!isPremium && storiesCount >= 2) {
+            return res.status(403).json({ 
+              message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
+              code: 'LIMIT_REACHED'
+            });
+          }
+        }
+      }
       
       // Character personas for AI prompt
       const characterPersonas = {
@@ -30,10 +53,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY || 'sk-or-v1-default'}`,
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || 'sk-or-v1-default'}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000',
-          'X-Title': 'StoryMagic AI'
+          'X-Title': 'Story Whirl'
         },
         body: JSON.stringify({
           model: 'anthropic/claude-3-haiku',
@@ -57,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('No story generated from API');
       }
 
-      // Save story if user is logged in
+      // Save story and update count if user is logged in
       let savedStory = null;
       if (userId) {
         savedStory = await storage.createStory({
@@ -66,6 +89,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           outputStory: generatedStory,
           character
         });
+        
+        // Update user's story count
+        const user = await storage.getUser(userId);
+        if (user) {
+          const newCount = parseInt(user.storiesGenerated || "0") + 1;
+          await storage.updateUser(userId, { storiesGenerated: newCount.toString() });
+        }
       }
 
       res.json({
@@ -120,6 +150,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate audio for story
+  app.post("/api/story/:id/audio", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+      
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      // Get story and verify ownership
+      const stories = await storage.getUserStories(userId);
+      const story = stories.find(s => s.id === id);
+      
+      if (!story) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
+
+      // Character voice settings
+      const voiceSettings = {
+        lumi: { voice: "alloy", speed: 0.9 },
+        spark: { voice: "echo", speed: 1.1 },
+        bella: { voice: "nova", speed: 1.0 }
+      };
+
+      const settings = voiceSettings[story.character as keyof typeof voiceSettings] || voiceSettings.lumi;
+
+      // Generate TTS using OpenAI (if we have OpenAI key, otherwise return placeholder)
+      let audioUrl = null;
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const mp3 = await openai.audio.speech.create({
+            model: "tts-1",
+            voice: settings.voice as any,
+            input: story.outputStory,
+            speed: settings.speed,
+          });
+
+          const buffer = Buffer.from(await mp3.arrayBuffer());
+          const audioId = `audio_${Date.now()}_${story.id}`;
+          
+          // In a real app, you'd upload to cloud storage
+          // For now, we'll create a data URL
+          audioUrl = `data:audio/mp3;base64,${buffer.toString('base64')}`;
+          
+        } catch (error) {
+          console.error('TTS generation error:', error);
+          // Return success but no audio if TTS fails
+        }
+      }
+
+      res.json({ 
+        audioUrl,
+        message: audioUrl ? 'Audio generated successfully' : 'Audio generation not available'
+      });
+
+    } catch (error) {
+      console.error('Audio generation error:', error);
+      res.status(500).json({ message: 'Failed to generate audio' });
+    }
+  });
+
+  // Demo login endpoint
+  app.post("/api/demo-login", async (req, res) => {
+    try {
+      const demoEmail = "demo@gmail.com";
+      
+      // Check if demo user exists
+      let user = await storage.getUserByEmail(demoEmail);
+      
+      if (!user) {
+        // Create demo user
+        user = await storage.createUser({ 
+          email: demoEmail, 
+          name: "Demo User",
+          isPremium: "false",
+          storiesGenerated: "0"
+        });
+      }
+
+      res.json(user);
+    } catch (error) {
+      console.error('Demo login error:', error);
+      res.status(500).json({ message: 'Failed to create demo user' });
+    }
+  });
+
   // Create or get user (for auth)
   app.post("/api/user", async (req, res) => {
     try {
@@ -134,7 +251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!user) {
         // Create new user
-        user = await storage.createUser({ email, name });
+        user = await storage.createUser({ 
+          email, 
+          name,
+          isPremium: "false",
+          storiesGenerated: "0"
+        });
       }
 
       res.json(user);

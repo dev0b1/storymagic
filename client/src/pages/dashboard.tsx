@@ -1,72 +1,101 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { MagicSparkles } from '@/components/ui/magic-sparkles';
 import { CharacterCard, CHARACTERS } from '@/components/character-card';
-import { StoryDisplay } from '@/components/story-display';
-import { ProFeatures } from '@/components/pro-features';
-import { authService, type AuthUser } from '@/lib/supabase';
+import { StoryReader } from '@/components/story-reader';
+import { StoryLimits } from '@/components/story-limits';
+import { authService, type User } from '@/lib/auth';
 import { storyService } from '@/lib/openrouter';
 import type { Story } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, LogOut, Sparkles, Plus } from 'lucide-react';
+import { Settings, LogOut, Sparkles, Plus, Upload, FileText, Crown } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function Dashboard() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userDetails, setUserDetails] = useState<any>(null);
   const [inputText, setInputText] = useState('');
   const [selectedCharacter, setSelectedCharacter] = useState<'lumi' | 'spark' | 'bella'>('lumi');
   const [generatedStory, setGeneratedStory] = useState('');
+  const [currentStoryId, setCurrentStoryId] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Check auth state
   useEffect(() => {
-    const checkAuth = async () => {
-      const currentUser = await authService.getCurrentUser();
-      if (!currentUser) {
-        setLocation('/auth');
-        return;
-      }
-      setUser(currentUser);
-    };
-
-    checkAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((user) => {
-      if (!user) {
-        setLocation('/auth');
-      } else {
-        setUser(user);
-      }
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) {
+      setLocation('/auth');
+      return;
+    }
+    setUser(currentUser);
   }, [setLocation]);
+
+  // Fetch user details from server
+  const { data: serverUser } = useQuery({
+    queryKey: ['/api/me'],
+    enabled: !!user,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/me', {
+        headers: { 'x-user-id': user!.id }
+      });
+      if (!response.ok) throw new Error('Failed to fetch user');
+      return response.json();
+    }
+  });
+
+  useEffect(() => {
+    if (serverUser) {
+      setUserDetails(serverUser);
+    }
+  }, [serverUser]);
 
   // Fetch user stories
   const { data: stories = [] } = useQuery<Story[]>({
     queryKey: ['/api/stories'],
     enabled: !!user,
-    retry: false
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/stories', {
+        headers: { 'x-user-id': user!.id }
+      });
+      if (!response.ok) throw new Error('Failed to fetch stories');
+      return response.json();
+    }
   });
 
   // Story generation mutation
   const generateStoryMutation = useMutation({
-    mutationFn: storyService.generateStory,
+    mutationFn: async (data: { text: string; character: string; userId: string }) => {
+      const response = await fetch('/api/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to generate story');
+      }
+      
+      return response.json();
+    },
     onSuccess: (data) => {
       setGeneratedStory(data.story);
+      setCurrentStoryId(data.savedStory?.id || null);
       toast({
         title: "Story created! ✨",
         description: "Your magical tale is ready to enjoy"
       });
-      // Invalidate stories to refresh the list
+      // Invalidate queries to refresh
       queryClient.invalidateQueries({ queryKey: ['/api/stories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/me'] });
     },
     onError: (error) => {
       toast({
@@ -87,10 +116,12 @@ export default function Dashboard() {
       return;
     }
 
+    if (!user?.id) return;
+    
     generateStoryMutation.mutate({
       text: inputText,
       character: selectedCharacter,
-      userId: user?.id
+      userId: user.id
     });
   };
 
@@ -167,13 +198,26 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-6">
             {/* Input Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
-              <h3 className="font-magical text-xl text-purple-800 mb-4">✨ Your Text to Transform</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-magical text-xl text-purple-800">✨ Your Text to Transform</h3>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50">
+                    <Upload className="w-4 h-4 mr-1" />
+                    Upload File
+                  </Button>
+                </div>
+              </div>
               
               <Textarea
-                placeholder="Paste your text, summary, or content here..."
+                placeholder="Paste your text, summary, or content here... 
+✨ Try pasting:
+• A book summary
+• A news article 
+• A Wikipedia page
+• Any text you want transformed!"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                className="w-full h-32 p-4 border border-purple-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                className="w-full h-40 p-4 border border-purple-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
                 data-testid="textarea-input"
               />
               
@@ -213,11 +257,17 @@ export default function Dashboard() {
             </div>
 
             {/* Story Output */}
-            <StoryDisplay 
-              story={generatedStory}
-              character={selectedCharacter}
-              isGenerating={generateStoryMutation.isPending}
-            />
+            {generatedStory && (
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
+                <h3 className="font-magical text-xl text-purple-800 mb-4">✨ Your Magical Story</h3>
+                <StoryReader 
+                  story={generatedStory}
+                  character={selectedCharacter}
+                  storyId={currentStoryId || undefined}
+                  userId={user?.id}
+                />
+              </div>
+            )}
 
             {generatedStory && (
               <Button
@@ -236,8 +286,14 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Pro Features */}
-            <ProFeatures />
+            {/* Story Limits */}
+            {userDetails && (
+              <StoryLimits 
+                storiesGenerated={parseInt(userDetails.storiesGenerated || "0")}
+                isPremium={userDetails.isPremium === "true"}
+                maxStories={2}
+              />
+            )}
 
             {/* Recent Stories */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">

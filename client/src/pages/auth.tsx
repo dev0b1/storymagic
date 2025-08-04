@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MagicSparkles } from '@/components/ui/magic-sparkles';
-import { authService } from '@/lib/supabase';
+import { authService } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Send, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
@@ -47,7 +47,7 @@ export default function Auth() {
             <div className="text-6xl mb-4">📧</div>
             <h3 className="font-magical text-3xl text-purple-800 mb-4">Magic Link Sent!</h3>
             <p className="text-gray-600 mb-6">
-              Check your email for a magical portal link to enter the realm of StoryMagic AI ✨
+              Check your email for a magical portal link to enter the realm of Story Whirl ✨
             </p>
             <p className="text-sm text-gray-500 mb-4">
               Sent to: <strong>{email}</strong>
@@ -122,6 +122,40 @@ export default function Auth() {
             )}
           </Button>
         </form>
+        
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-gradient-to-br from-gray-100 to-gray-200 px-2 text-gray-500">Or</span>
+          </div>
+        </div>
+        
+        <Button 
+          onClick={async () => {
+            setIsLoading(true);
+            try {
+              const response = await fetch('/api/demo-login', { method: 'POST' });
+              const user = await response.json();
+              localStorage.setItem('userId', user.id);
+              setLocation('/dashboard');
+            } catch (error) {
+              toast({
+                title: "Demo login failed",
+                description: "Please try again",
+                variant: "destructive"
+              });
+            } finally {
+              setIsLoading(false);
+            }
+          }}
+          variant="outline" 
+          className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 py-3"
+          data-testid="button-demo-login"
+        >
+          Try Demo (demo@gmail.com)
+        </Button>
         
         <p className="text-center text-sm text-gray-500 mt-6">
           No passwords needed - just pure magic ✨
