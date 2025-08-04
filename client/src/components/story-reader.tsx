@@ -22,21 +22,24 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
   const paragraphs = story.split('\n\n').filter(p => p.trim());
 
   const generateAudio = async () => {
-    if (!storyId || !userId) {
+    if (!storyId) {
       toast({
-        title: "Login required",
-        description: "Please log in to generate audio",
+        title: "Story not ready",
+        description: "Please generate a story first",
         variant: "destructive"
       });
       return;
     }
+    
+    // Use fallback userId if not provided (for demo users)
+    const finalUserId = userId || 'demo-user';
 
     setIsGeneratingAudio(true);
     try {
       const response = await fetch(`/api/story/${storyId}/audio`, {
         method: 'POST',
         headers: {
-          'x-user-id': userId
+          'x-user-id': finalUserId
         }
       });
 

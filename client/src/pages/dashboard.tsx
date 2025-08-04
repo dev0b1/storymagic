@@ -202,9 +202,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Main Content - Single Column Layout */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6 space-y-6">
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full flex">
+            {/* Left Side - Input and History */}
+            <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
 
             {/* Input Section */}
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
@@ -241,26 +243,17 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
                   </div>
                 </div>
                 
-                {/* Character Selection - Horizontal Grid */}
+                {/* Character Selection - With Avatars */}
                 <div>
                   <h4 className="font-semibold text-gray-800 mb-3">Choose Your Storyteller:</h4>
                   <div className="grid grid-cols-3 gap-3">
                     {CHARACTERS.map((character) => (
-                      <div
+                      <CharacterCard
                         key={character.id}
-                        onClick={() => setSelectedCharacter(character.id as 'lumi' | 'spark' | 'bella')}
-                        className={`cursor-pointer p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 ${
-                          selectedCharacter === character.id
-                            ? 'border-purple-400 bg-purple-50 shadow-lg'
-                            : 'border-gray-200 bg-white hover:border-purple-300'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="text-2xl mb-1">{character.avatar}</div>
-                          <div className="font-semibold text-sm text-gray-800">{character.name}</div>
-                          <div className="text-xs text-gray-600 leading-tight">{character.description}</div>
-                        </div>
-                      </div>
+                        character={character}
+                        selected={selectedCharacter === character.id}
+                        onSelect={setSelectedCharacter}
+                      />
                     ))}
                   </div>
                 </div>
@@ -347,47 +340,49 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
               </CardContent>
             </Card>
 
-            {/* Story Display */}
-            {generatedStory && (
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-purple-800">
-                    <Sparkles className="w-5 h-5 mr-2" />
-                    Your Magical Story
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <StoryReader 
-                    story={generatedStory}
-                    character={selectedCharacter}
-                    storyId={currentStoryId || undefined}
-                    userId={user?.id}
-                  />
-                  
-                  <Button
-                    onClick={() => {
-                      setInputText('');
-                      setGeneratedStory('');
-                      setCurrentStoryId(null);
-                    }}
-                    className="w-full mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate Another Story
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            </div>
 
-            {!generatedStory && (
-              <Card className="bg-white/60 backdrop-blur-sm shadow-xl">
-                <CardContent className="text-center py-12">
-                  <div className="text-6xl mb-4">✨</div>
-                  <h3 className="font-magical text-2xl text-purple-800 mb-2">Ready for Magic?</h3>
-                  <p className="text-gray-600">Enter your text and choose a storyteller to begin your magical transformation!</p>
-                </CardContent>
-              </Card>
-            )}
+            {/* Right Side - Story Display */}
+            <div className="w-1/2 p-6 overflow-y-auto">
+              {generatedStory ? (
+                <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-purple-800">
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Your Magical Story
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <StoryReader 
+                      story={generatedStory}
+                      character={selectedCharacter}
+                      storyId={currentStoryId || undefined}
+                      userId={user?.id}
+                    />
+                    
+                    <Button
+                      onClick={() => {
+                        setInputText('');
+                        setGeneratedStory('');
+                        setCurrentStoryId(null);
+                      }}
+                      className="w-full mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate Another Story
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="bg-white/60 backdrop-blur-sm shadow-xl h-full flex items-center justify-center">
+                  <CardContent className="text-center">
+                    <div className="text-6xl mb-4">✨</div>
+                    <h3 className="font-magical text-2xl text-purple-800 mb-2">Ready for Magic?</h3>
+                    <p className="text-gray-600">Enter your text and choose a storyteller to begin your magical transformation!</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
       </div>
