@@ -23,10 +23,11 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
 
   const generateAudio = async () => {
     if (!storyId) {
+      // If no storyId, use browser TTS directly
+      playBrowserTTS();
       toast({
-        title: "Story not ready",
-        description: "Please generate a story first",
-        variant: "destructive"
+        title: "Audio ready!",
+        description: "Using browser text-to-speech"
       });
       return;
     }

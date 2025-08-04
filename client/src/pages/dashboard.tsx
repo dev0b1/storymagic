@@ -94,8 +94,9 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: (data) => {
+      console.log('Story generation response:', data); // Debug log
       setGeneratedStory(data.story);
-      setCurrentStoryId(data.storyId);
+      setCurrentStoryId(data.storyId || data.id); // Try both possible ID fields
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/stories'] });

@@ -123,6 +123,7 @@ Keep the story under 400 words.`;
       res.json({
         story: generatedStory,
         character,
+        storyId: savedStory?.id,
         savedStory
       });
 
