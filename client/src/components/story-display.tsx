@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Download, Volume1 } from 'lucide-react';
+import { Copy, Download, Volume1, VolumeX, Music } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface StoryDisplayProps {
@@ -12,8 +12,36 @@ interface StoryDisplayProps {
 export function StoryDisplay({ story, character, isGenerating = false }: StoryDisplayProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [backgroundMusicPlaying, setBackgroundMusicPlaying] = useState(false);
   const { toast } = useToast();
+  
+  const backgroundMusicRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Using Web Audio API for reliable background ambience
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorRef = useRef<OscillatorNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
+  // Initialize Web Audio API for background ambience
+  useEffect(() => {
+    return () => {
+      // Cleanup audio context
+      if (oscillatorRef.current) {
+        try {
+          oscillatorRef.current.stop();
+        } catch (e) {
+          // Oscillator already stopped
+        }
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Story typing effect
   useEffect(() => {
     if (story && !isGenerating) {
       setIsTyping(true);
@@ -67,10 +95,74 @@ export function StoryDisplay({ story, character, isGenerating = false }: StoryDi
     });
   };
 
-  const handleSpeak = () => {
+  const startBackgroundMusic = async () => {
+    if (!musicEnabled) return;
+    
+    try {
+      // Create Audio Context if not exists
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      // Resume context if suspended
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      
+      // Create magical ambient sound
+      if (!oscillatorRef.current) {
+        oscillatorRef.current = audioContextRef.current.createOscillator();
+        gainNodeRef.current = audioContextRef.current.createGain();
+        
+        // Connect nodes
+        oscillatorRef.current.connect(gainNodeRef.current);
+        gainNodeRef.current.connect(audioContextRef.current.destination);
+        
+        // Set magical frequency and volume
+        oscillatorRef.current.frequency.setValueAtTime(220, audioContextRef.current.currentTime);
+        oscillatorRef.current.type = 'sine';
+        gainNodeRef.current.gain.setValueAtTime(0.1, audioContextRef.current.currentTime); // Very quiet
+        
+        oscillatorRef.current.start();
+        setBackgroundMusicPlaying(true);
+      }
+    } catch (error) {
+      console.log('Web Audio API not supported or blocked');
+    }
+  };
+
+  const stopBackgroundMusic = () => {
+    if (oscillatorRef.current) {
+      try {
+        oscillatorRef.current.stop();
+        oscillatorRef.current = null;
+        setBackgroundMusicPlaying(false);
+      } catch (e) {
+        // Already stopped
+      }
+    }
+  };
+
+  const toggleMusic = () => {
+    const newMusicState = !musicEnabled;
+    setMusicEnabled(newMusicState);
+    if (!newMusicState) {
+      stopBackgroundMusic();
+    }
+  };
+
+  const handleSpeak = async () => {
     if ('speechSynthesis' in window) {
-      // Stop any current speech
+      // Stop any current speech and music
       speechSynthesis.cancel();
+      stopBackgroundMusic();
+      
+      setIsSpeaking(true);
+      
+      // Start background music if enabled
+      if (musicEnabled) {
+        await startBackgroundMusic();
+      }
       
       const utterance = new SpeechSynthesisUtterance(story);
       utterance.rate = 0.8;
@@ -88,11 +180,22 @@ export function StoryDisplay({ story, character, isGenerating = false }: StoryDi
         utterance.voice = preferredVoice;
       }
       
+      // Handle speech end
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        stopBackgroundMusic();
+      };
+      
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        stopBackgroundMusic();
+      };
+      
       speechSynthesis.speak(utterance);
       
       toast({
         title: "Story narration started!",
-        description: "Listen to your magical tale 🔊"
+        description: "Listen to your magical tale with background music"
       });
     } else {
       toast({
@@ -101,6 +204,17 @@ export function StoryDisplay({ story, character, isGenerating = false }: StoryDi
         variant: "destructive"
       });
     }
+  };
+
+  const handleStopSpeech = () => {
+    speechSynthesis.cancel();
+    setIsSpeaking(false);
+    stopBackgroundMusic();
+    
+    toast({
+      title: "Narration stopped",
+      description: "Story playback has been stopped"
+    });
   };
 
   if (isGenerating) {
@@ -136,15 +250,38 @@ export function StoryDisplay({ story, character, isGenerating = false }: StoryDi
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-magical text-xl text-purple-800">✨ Your Magical Tale</h3>
         <div className="flex space-x-2">
+          {!isSpeaking ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSpeak}
+              className="bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+              data-testid="button-speak"
+            >
+              <Volume1 className="w-4 h-4 mr-2" />
+              Listen
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleStopSpeech}
+              className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200"
+              data-testid="button-stop-speak"
+            >
+              <VolumeX className="w-4 h-4 mr-2" />
+              Stop
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
-            onClick={handleSpeak}
-            className="bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
-            data-testid="button-speak"
+            onClick={toggleMusic}
+            className={`${musicEnabled ? 'bg-green-100 hover:bg-green-200 text-green-700 border-green-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-500 border-gray-200'}`}
+            data-testid="button-toggle-music"
           >
-            <Volume1 className="w-4 h-4 mr-2" />
-            Listen
+            <Music className="w-4 h-4 mr-2" />
+            {musicEnabled ? 'Music On' : 'Music Off'}
           </Button>
           <Button
             size="sm"
