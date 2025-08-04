@@ -1,0 +1,150 @@
+Build a magical, flip-ready full-stack AI web app called **StoryMagic AI**.
+
+---
+
+✨ 🧱 FRONTEND (React + TailwindCSS or daisyUI)
+
+Pages:
+
+1. **Landing Page (/)**  
+   - Background: soft fantasy gradient (sky, forest, or magical theme)  
+   - Headline: "Turn Any Text into a Magical, Narrated Tale"  
+   - Subtext: "Transform boring summaries into whimsical adventures in 60 seconds"  
+   - CTA button: “Try it Free” → redirects to login  
+   - Add demo preview box: Paste + example story result (static)  
+   - Font: Use fantasy-style font like “Uncial Antiqua” or “Macondo” via Google Fonts  
+   - Add floating sparkles or glowing text using Tailwind animations
+
+2. **Auth Page (/login)**  
+   - Use **Supabase Auth**: Email + Magic Link  
+   - Minimal UI, styled like a scroll or magical door  
+   - After login, redirect to `/dashboard`
+
+3. **Dashboard (/dashboard)**  
+   - Welcome user by name  
+   - Input: Paste text/summary  
+   - Character selector (dropdown or cards):  
+     - 🦉 Lumi the Owl – calm & wise  
+     - 🦊 Sir Spark – cheeky & fast  
+     - 🤖 Bella the Bot – curious & cheerful  
+   - Button: “Generate Magical Story”  
+   - Output: Scrollable area with story (typing effect or fade-in animation)  
+   - TTS playback button: “🔊 Listen to the Story”  
+   - Export: Copy to clipboard + download `.txt`  
+   - Show last 3 stories below if logged in  
+   - Button: “Generate Another”
+
+4. **Fake Pro Section (/dashboard sidebar or inline)**  
+   - Locked card titled: **🌟 StoryMagic Pro (Coming Soon)**  
+   - Grayed out features list:  
+     - Upload eBooks for story generation  
+     - Create your own characters  
+     - Export to audio (.mp3) or PDF  
+     - Save unlimited stories  
+     - API Access for developers  
+   - Disabled “Upgrade to Pro” button with tooltip: “Coming soon!”
+
+---
+
+🧠 BACKEND (Node.js or Python backend via Express or FastAPI)
+
+Routes:
+
+1. `POST /api/story`
+   - Accepts: `text`, `character`
+   - Calls OpenRouter API using GPT-3.5 or Claude (use OpenRouter API key)
+   - Inject character persona into system prompt:
+     > "Rewrite this content as a magical story for children, in the voice and tone of {{character}}"
+   - Returns: formatted story (3–5 paragraphs)
+
+2. `GET /api/me`
+   - Returns current Supabase-authenticated user info
+
+3. (Optional if time permits) `GET /api/stories`
+   - Fetch last 3 generated stories for logged-in user  
+   - Supabase table: `user_id`, `input_text`, `output_story`, `character`, `timestamp`
+
+---
+
+🔊 TTS (Narration)
+
+1. Include a **TTS placeholder button**:
+   - Label: “🔊 Listen to Story”  
+   - Plays story using:  
+     - **Browser TTS** via `SpeechSynthesisUtterance` by default  
+     - Add comment in code:
+       ```js
+       // To upgrade:
+       // Swap with ElevenLabs (https://api.elevenlabs.io)
+       // or Deepgram TTS (https://developers.deepgram.com)
+       // or Cartesian Voice (https://www.cartesian.systems/)
+       // Pick one with most free credits
+       // Convert story text to audio using their endpoint, and stream audio
+       ```
+   - Only 1 voice per character needed for MVP
+
+---
+
+🎨 VISUALS & MAGIC ELEMENTS
+
+- Background: `bg-gradient-to-br from-indigo-200 via-pink-100 to-white`  
+- Add Tailwind animation: `animate-fadeIn`, `hover:scale-105`, `text-glow`  
+- Add sparkle SVG or `radial-gradient` with blur effect  
+- Character card with emoji + name + short description
+
+---
+
+🔐 AUTH
+
+- Use **Supabase** for auth and optional storage  
+- Magic link login only (no password required)  
+- Store session in browser, protected `/dashboard` route
+
+---
+
+📤 EXPORT OPTIONS
+
+- Button to copy story to clipboard  
+- Button to download `.txt` file  
+- Optional: Button to share story (just copies story to clipboard with “Shared by StoryMagic AI”)
+
+---
+
+🧾 FILE STRUCTURE
+
+- `/pages`: landing, login, dashboard  
+- `/components`: InputBox, CharacterCard, StoryDisplay, ProFeatures  
+- `/lib`: Supabase client, OpenRouter client  
+- `/api`: story.ts, auth.ts  
+- `/public`: character images (optional)
+
+---
+
+📘 README
+
+Include setup instructions:
+- How to add Supabase keys  
+- How to connect OpenRouter API  
+- Optional: how to replace TTS with ElevenLabs or Cartesian  
+- How to deploy on Vercel or Replit
+
+---
+
+✅ NOTES FOR BUYER
+
+- MVP is live and working  
+- Auth included  
+- “Pro” section shows monetization potential  
+- Clean UI with magical theme  
+- Optional upgrade paths:
+  - Stripe for subscriptions  
+  - Ebook upload parsing (commented for future dev)  
+  - Custom character builder
+
+---
+
+🔚 DEPLOYMENT
+
+- Works on Replit or Vercel  
+- Uses: Supabase Auth, OpenRouter (Claude or GPT-3.5), browser TTS by default  
+- Free to run with credits from OpenRouter & optional TTS services
