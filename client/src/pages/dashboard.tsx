@@ -74,7 +74,7 @@ export default function Dashboard() {
   // Story generation mutation
   const generateStoryMutation = useMutation({
     mutationFn: async (data: { text: string; character: string; userId: string }) => {
-      const response = await fetch('/api/generate-story', {
+      const response = await fetch('/api/story', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
