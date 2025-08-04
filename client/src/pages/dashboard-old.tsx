@@ -12,7 +12,7 @@ import { authService, type User } from '@/lib/auth';
 import { storyService } from '@/lib/openrouter';
 import type { Story } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, LogOut, Sparkles, Plus, FileText, Crown } from 'lucide-react';
+import { Settings, LogOut, Sparkles, Plus, Upload, FileText, Crown } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -74,49 +74,50 @@ export default function Dashboard() {
   // Story generation mutation
   const generateStoryMutation = useMutation({
     mutationFn: async (data: { text: string; character: string; userId: string }) => {
-      const response = await fetch('/api/generate-story', {
+      const response = await fetch('/api/story', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': data.userId
-        },
-        body: JSON.stringify({
-          text: data.text,
-          character: data.character
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       });
-
+      
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to generate story');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to generate story');
       }
-
+      
       return response.json();
     },
     onSuccess: (data) => {
       setGeneratedStory(data.story);
-      setCurrentStoryId(data.storyId);
-      
-      // Invalidate queries to refresh data
+      setCurrentStoryId(data.savedStory?.id || null);
+      toast({
+        title: "Story created! ✨",
+        description: "Your magical tale is ready to enjoy"
+      });
+      // Invalidate queries to refresh
       queryClient.invalidateQueries({ queryKey: ['/api/stories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/me'] });
-      
-      toast({
-        title: "✨ Story Generated!",
-        description: "Your magical story is ready!",
-      });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
-        title: "Story generation failed",
-        description: error.message,
+        title: "Magic failed",
+        description: error instanceof Error ? error.message : "Failed to generate story",
         variant: "destructive"
       });
     }
   });
 
   const handleGenerateStory = () => {
-    if (!user || !inputText.trim()) return;
+    if (!inputText.trim()) {
+      toast({
+        title: "Missing text",
+        description: "Please enter some text to transform into a story",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!user?.id) return;
     
     generateStoryMutation.mutate({
       text: inputText,
@@ -144,6 +145,15 @@ export default function Dashboard() {
       case 'spark': return 'border-l-orange-400';
       case 'bella': return 'border-l-purple-400';
       default: return 'border-l-gray-400';
+    }
+  };
+
+  const getCharacterBgColor = (storyChar: string) => {
+    switch (storyChar) {
+      case 'lumi': return 'hover:bg-indigo-50';
+      case 'spark': return 'hover:bg-orange-50';
+      case 'bella': return 'hover:bg-purple-50';
+      default: return 'hover:bg-gray-50';
     }
   };
 
@@ -368,6 +378,168 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
           ) : (
             <p className="text-gray-600 text-center py-4">No stories yet. Create your first magical tale!</p>
           )}
+        </div>
+      </div>
+    </div>
+
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Main Story Generator */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Input Section */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-magical text-xl text-purple-800">✨ Your Text to Transform</h3>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50">
+                    <Upload className="w-4 h-4 mr-1" />
+                    Upload File
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <Textarea
+                  placeholder={`Paste your text, summary, or content here... 
+✨ Try pasting:
+• A book summary
+• A news article 
+• A Wikipedia page
+• Any text you want transformed!
+
+${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free: Up to 600 characters"}`}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  className={`w-full h-40 p-4 border ${inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600) ? 'border-red-400' : 'border-purple-200'} rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300`}
+                  data-testid="textarea-input"
+                />
+                <div className={`absolute bottom-2 right-2 text-xs px-2 py-1 rounded-full ${
+                  inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600) 
+                    ? 'bg-red-100 text-red-700' 
+                    : inputText.length > (userDetails?.isPremium === "true" ? 18000 : 500)
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {inputText.length}/{userDetails?.isPremium === "true" ? "20,000" : "600"}
+                </div>
+              </div>
+              
+              {/* Character Selection */}
+              <div className="mt-6">
+                <h4 className="font-semibold text-gray-800 mb-4">Choose Your Storyteller:</h4>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {CHARACTERS.map((character) => (
+                    <CharacterCard
+                      key={character.id}
+                      character={character}
+                      selected={selectedCharacter === character.id}
+                      onSelect={setSelectedCharacter}
+                    />
+                  ))}
+                </div>
+              </div>
+              
+              <Button
+                onClick={handleGenerateStory}
+                disabled={
+                  generateStoryMutation.isPending || 
+                  !inputText.trim() || 
+                  inputText.length > (userDetails?.isPremium === "true" ? 20000 : 600)
+                }
+                className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                data-testid="button-generate-story"
+              >
+                {generateStoryMutation.isPending ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Weaving Magic...
+                  </div>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate Magical Story
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Story Output */}
+            {generatedStory && (
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
+                <h3 className="font-magical text-xl text-purple-800 mb-4">✨ Your Magical Story</h3>
+                <StoryReader 
+                  story={generatedStory}
+                  character={selectedCharacter}
+                  storyId={currentStoryId || undefined}
+                  userId={user?.id}
+                />
+              </div>
+            )}
+
+            {generatedStory && (
+              <Button
+                onClick={() => {
+                  setInputText('');
+                  setGeneratedStory('');
+                }}
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
+                data-testid="button-generate-another"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Generate Another Story
+              </Button>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Story Limits */}
+            {userDetails && (
+              <StoryLimits 
+                storiesGenerated={parseInt(userDetails.storiesGenerated || "0")}
+                isPremium={userDetails.isPremium === "true"}
+                maxStories={2}
+              />
+            )}
+
+            {/* Recent Stories */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
+              <h3 className="font-magical text-xl text-purple-800 mb-4">📚 Recent Tales</h3>
+              
+              {stories.length > 0 ? (
+                <div className="space-y-4">
+                  {stories.slice(0, 3).map((story) => (
+                    <div 
+                      key={story.id}
+                      className={`border-l-4 pl-4 py-2 rounded-r-lg transition-colors cursor-pointer ${getCharacterBorderColor(story.character)} ${getCharacterBgColor(story.character)}`}
+                      data-testid={`story-${story.id}`}
+                    >
+                      <h4 className="font-semibold text-sm text-gray-800 truncate">
+                        {story.inputText.slice(0, 40)}...
+                      </h4>
+                      <p className="text-xs text-gray-600">
+                        with {CHARACTERS.find(c => c.id === story.character)?.emoji} {CHARACTERS.find(c => c.id === story.character)?.name} • {story.createdAt ? new Date(story.createdAt).toLocaleDateString() : 'Recent'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="text-3xl mb-2">📝</div>
+                  <p className="text-sm">No stories yet. Create your first magical tale!</p>
+                </div>
+              )}
+              
+              {stories.length > 3 && (
+                <Button 
+                  variant="ghost"
+                  className="w-full mt-4 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                  data-testid="button-view-all-stories"
+                >
+                  View All Stories →
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
