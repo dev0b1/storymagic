@@ -46,15 +46,36 @@ export default function Landing() {
             Transform boring summaries into whimsical adventures in 60 seconds
           </p>
           
-          <Link href="/auth">
+          <div className="flex flex-col sm:flex-row gap-4 items-center mb-16">
+            <Link href="/auth">
+              <Button 
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xl px-12 py-4 font-bold transition-all duration-300 hover:scale-105 shadow-xl"
+                data-testid="button-try-free"
+              >
+                <Sparkles className="w-5 h-5 mr-2" />
+                Try it Free
+              </Button>
+            </Link>
             <Button 
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xl px-12 py-4 font-bold transition-all duration-300 hover:scale-105 shadow-xl mb-16"
-              data-testid="button-try-free"
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/demo-login', { method: 'POST' });
+                  const user = await response.json();
+                  localStorage.setItem('userId', user.id);
+                  localStorage.setItem('userEmail', user.email);
+                  localStorage.setItem('userName', user.name || '');
+                  window.location.href = '/dashboard';
+                } catch (error) {
+                  console.error('Demo login failed:', error);
+                }
+              }}
+              variant="outline" 
+              className="border-purple-300 text-purple-700 hover:bg-purple-50 text-xl px-8 py-4 font-medium"
+              data-testid="button-demo"
             >
-              <Sparkles className="w-5 h-5 mr-2" />
-              Try it Free
+              🚀 Demo (Instant Access)
             </Button>
-          </Link>
+          </div>
 
           {/* Demo Preview */}
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 shadow-2xl max-w-4xl mx-auto" 

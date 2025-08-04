@@ -20,6 +20,17 @@ export default function Auth() {
 
     setIsLoading(true);
     try {
+      // Auto-login for demo account
+      if (email.toLowerCase() === 'demo@gmail.com') {
+        const response = await fetch('/api/demo-login', { method: 'POST' });
+        const user = await response.json();
+        localStorage.setItem('userId', user.id);
+        localStorage.setItem('userEmail', user.email);
+        localStorage.setItem('userName', user.name || '');
+        setLocation('/dashboard');
+        return;
+      }
+
       await authService.signInWithMagicLink(email);
       setEmailSent(true);
       toast({
@@ -94,7 +105,7 @@ export default function Auth() {
           <div>
             <Input
               type="email" 
-              placeholder="your.email@realm.com"
+              placeholder="Enter email or try: demo@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
