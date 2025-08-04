@@ -42,15 +42,24 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
 
       const result = await response.json();
       if (result.audioUrl) {
-        setAudioUrl(result.audioUrl);
-        toast({
-          title: "Audio generated!",
-          description: "Your story is ready to listen"
-        });
+        if (result.audioUrl === 'browser-tts') {
+          // Use browser TTS as fallback
+          playBrowserTTS();
+          toast({
+            title: "Audio ready!",
+            description: `Using ${result.provider} text-to-speech`
+          });
+        } else {
+          setAudioUrl(result.audioUrl);
+          toast({
+            title: "Audio generated!",
+            description: `${result.message || 'Your story is ready to listen'}`
+          });
+        }
       } else {
         toast({
           title: "Audio not available",
-          description: "Audio generation is not configured"
+          description: result.message || "Audio generation is not configured"
         });
       }
     } catch (error) {
@@ -99,6 +108,62 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
         clearInterval(interval);
       }
     }, 3000); // 3 seconds per paragraph
+  };
+
+  const playBrowserTTS = () => {
+    if ('speechSynthesis' in window) {
+      // Stop any existing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(story);
+      
+      // Character-specific voice settings
+      const voiceSettings = {
+        lumi: { rate: 0.8, pitch: 1.1 },
+        spark: { rate: 1.2, pitch: 1.3 },
+        bella: { rate: 1.0, pitch: 1.0 }
+      };
+      
+      const settings = voiceSettings[character as keyof typeof voiceSettings] || voiceSettings.lumi;
+      utterance.rate = settings.rate;
+      utterance.pitch = settings.pitch;
+      
+      utterance.onstart = () => {
+        setIsPlaying(true);
+        setShowMagicalBackground(true);
+      };
+      
+      utterance.onend = () => {
+        setIsPlaying(false);
+        setShowMagicalBackground(false);
+        setCurrentParagraph(0);
+        toast({
+          title: "Story complete!",
+          description: "The magical tale has ended"
+        });
+      };
+      
+      // Track progress through paragraphs
+      let wordCount = 0;
+      const totalWords = story.split(' ').length;
+      const wordsPerParagraph = paragraphs.map(p => p.split(' ').length);
+      
+      utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          wordCount++;
+          let currentWords = 0;
+          for (let i = 0; i < paragraphs.length; i++) {
+            currentWords += wordsPerParagraph[i];
+            if (wordCount <= currentWords) {
+              setCurrentParagraph(i);
+              break;
+            }
+          }
+        }
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const downloadAudio = () => {

@@ -164,49 +164,47 @@ export default function Dashboard() {
       />
       
       <div className="relative z-10 h-screen flex flex-col">
-        {/* Header */}
-        <div className="flex justify-between items-center p-6 bg-white/10 backdrop-blur-sm border-b border-white/20">
+        {/* Header - Compact */}
+        <div className="flex justify-between items-center px-6 py-3 bg-white/10 backdrop-blur-sm border-b border-white/20">
           <div className="flex items-center space-x-3">
-            <Sparkles className="text-3xl text-purple-600 animate-bounce" />
-            <h1 className="font-magical text-4xl text-purple-800" style={{ textShadow: '0 0 10px rgba(147, 51, 234, 0.5)' }}>
-              Story Whirl
-            </h1>
+            <Sparkles className="text-xl text-purple-600" />
+            <h1 className="font-magical text-2xl text-purple-800">Story Whirl</h1>
             {userDetails?.isPremium === "true" && (
-              <Badge className="bg-gradient-to-r from-yellow-600 to-orange-600 text-white">
+              <Badge className="bg-gradient-to-r from-yellow-600 to-orange-600 text-white text-xs">
                 <Crown className="w-3 h-3 mr-1" />
-                Premium
+                Pro
               </Badge>
             )}
+            {/* Story Counter in Header */}
+            <div className="flex items-center space-x-2 bg-white/20 rounded-lg px-2 py-1">
+              <FileText className="h-3 w-3 text-purple-700" />
+              <span className="text-xs font-medium text-purple-700">
+                {serverUser?.storiesGenerated || 0}{serverUser?.isPremium !== "true" && "/2"}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             <Link href="/settings">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="bg-white/80 hover:bg-white/90"
-                data-testid="button-settings"
-              >
-                <Settings className="w-4 h-4 mr-2" />
+              <Button variant="ghost" size="sm" className="text-xs px-2 py-1 text-purple-700 hover:bg-white/20">
+                <Settings className="w-3 h-3 mr-1" />
                 Settings
               </Button>
             </Link>
             <Button 
               onClick={handleSignOut}
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
-              className="bg-white/80 hover:bg-white/90"
-              data-testid="button-logout"
+              className="text-xs px-2 py-1 text-purple-700 hover:bg-white/20"
             >
-              <LogOut className="w-4 h-4 mr-2" />
+              <LogOut className="w-3 h-3 mr-1" />
               Logout
             </Button>
           </div>
         </div>
 
-        {/* Main Content - Side by Side Layout */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Side - Input and Controls */}
-          <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
+        {/* Main Content - Single Column Layout */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-6 space-y-6">
 
             {/* Input Section */}
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
@@ -243,17 +241,26 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
                   </div>
                 </div>
                 
-                {/* Character Selection */}
+                {/* Character Selection - Horizontal Grid */}
                 <div>
                   <h4 className="font-semibold text-gray-800 mb-3">Choose Your Storyteller:</h4>
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {CHARACTERS.map((character) => (
-                      <CharacterCard
+                      <div
                         key={character.id}
-                        character={character}
-                        selected={selectedCharacter === character.id}
-                        onSelect={setSelectedCharacter}
-                      />
+                        onClick={() => setSelectedCharacter(character.id as 'lumi' | 'spark' | 'bella')}
+                        className={`cursor-pointer p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 ${
+                          selectedCharacter === character.id
+                            ? 'border-purple-400 bg-purple-50 shadow-lg'
+                            : 'border-gray-200 bg-white hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-2xl mb-1">{character.avatar}</div>
+                          <div className="font-semibold text-sm text-gray-800">{character.name}</div>
+                          <div className="text-xs text-gray-600 leading-tight">{character.description}</div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -301,44 +308,80 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Right Side - Story Display */}
-          <div className="w-1/2 p-6 overflow-y-auto">
-            {generatedStory ? (
-              <div className="space-y-6">
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="flex items-center text-purple-800">
-                      <FileText className="w-5 h-5 mr-2" />
-                      Your Magical Story
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <StoryReader 
-                      story={generatedStory}
-                      character={selectedCharacter}
-                      storyId={currentStoryId || undefined}
-                      userId={user?.id}
-                    />
-                  </CardContent>
-                </Card>
+            {/* Recent Stories Section */}
+            <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center text-purple-800">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Recent Stories
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stories.length > 0 ? (
+                  <div className="grid gap-3">
+                    {stories.slice(0, 3).map((story) => (
+                      <div
+                        key={story.id}
+                        className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+                        onClick={() => {
+                          setGeneratedStory(story.outputStory);
+                          setSelectedCharacter(story.character as 'lumi' | 'spark' | 'bella');
+                          setCurrentStoryId(story.id);
+                        }}
+                      >
+                        <div className={`border-l-4 pl-3 ${getCharacterBorderColor(story.character)}`}>
+                          <p className="text-sm font-medium text-gray-800 mb-1">
+                            {CHARACTERS.find(c => c.id === story.character)?.name || 'Unknown'}
+                          </p>
+                          <p className="text-xs text-gray-600 line-clamp-2">
+                            {story.inputText.slice(0, 100)}...
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 py-4">No stories yet! Generate your first magical tale above.</p>
+                )}
+              </CardContent>
+            </Card>
 
-                <Button
-                  onClick={() => {
-                    setInputText('');
-                    setGeneratedStory('');
-                  }}
-                  className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
-                  data-testid="button-generate-another"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Generate Another Story
-                </Button>
-              </div>
-            ) : (
-              <Card className="bg-white/60 backdrop-blur-sm shadow-xl h-full flex items-center justify-center">
-                <CardContent className="text-center">
+            {/* Story Display */}
+            {generatedStory && (
+              <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-purple-800">
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    Your Magical Story
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <StoryReader 
+                    story={generatedStory}
+                    character={selectedCharacter}
+                    storyId={currentStoryId || undefined}
+                    userId={user?.id}
+                  />
+                  
+                  <Button
+                    onClick={() => {
+                      setInputText('');
+                      setGeneratedStory('');
+                      setCurrentStoryId(null);
+                    }}
+                    className="w-full mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate Another Story
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {!generatedStory && (
+              <Card className="bg-white/60 backdrop-blur-sm shadow-xl">
+                <CardContent className="text-center py-12">
                   <div className="text-6xl mb-4">✨</div>
                   <h3 className="font-magical text-2xl text-purple-800 mb-2">Ready for Magic?</h3>
                   <p className="text-gray-600">Enter your text and choose a storyteller to begin your magical transformation!</p>
@@ -346,39 +389,6 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
               </Card>
             )}
           </div>
-        </div>
-
-        {/* Bottom Section - Recent Stories */}
-        <div className="p-6 bg-white/10 backdrop-blur-sm border-t border-white/20">
-          <h3 className="font-magical text-xl text-purple-800 mb-4">📚 Recent Tales</h3>
-          {stories.length > 0 ? (
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {stories.slice(0, 5).map((story) => (
-                <Card 
-                  key={story.id}
-                  className="min-w-64 bg-white/80 backdrop-blur-sm hover:bg-white/90 cursor-pointer transition-all duration-300 hover:scale-105"
-                  onClick={() => {
-                    setGeneratedStory(story.outputStory);
-                    setSelectedCharacter(story.character as 'lumi' | 'spark' | 'bella');
-                    setCurrentStoryId(story.id);
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className={`border-l-4 pl-3 ${getCharacterBorderColor(story.character)}`}>
-                      <p className="text-sm font-medium text-gray-800 mb-1">
-                        {CHARACTERS.find(c => c.id === story.character)?.name || 'Unknown'}
-                      </p>
-                      <p className="text-xs text-gray-600 line-clamp-2">
-                        {story.inputText.slice(0, 80)}...
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-600 text-center py-4">No stories yet. Create your first magical tale!</p>
-          )}
         </div>
       </div>
     </div>

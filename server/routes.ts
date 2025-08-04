@@ -198,6 +198,10 @@ Keep the story under 400 words.`;
         return res.status(404).json({ message: 'Story not found' });
       }
 
+      // Get user to check if premium (for demo purposes, allow audio for all users)
+      const user = await storage.getUser(userId);
+      const allowAudio = true; // Allow audio generation for all users including demo
+
       let audioUrl = null;
       let provider = 'none';
 
@@ -268,10 +272,17 @@ Keep the story under 400 words.`;
         }
       }
 
+      // Browser-based fallback TTS for demo users
+      if (!audioUrl) {
+        // Return a special response that triggers browser TTS
+        provider = 'browser';
+        audioUrl = 'browser-tts'; // Special marker for client-side TTS
+      }
+
       res.json({ 
         audioUrl,
         provider,
-        message: audioUrl ? `Audio generated successfully using ${provider}` : 'Audio generation not available - missing API keys'
+        message: audioUrl === 'browser-tts' ? 'Using browser text-to-speech' : audioUrl ? `Audio generated successfully using ${provider}` : 'Audio generation not available'
       });
 
     } catch (error) {

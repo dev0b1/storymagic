@@ -12,6 +12,9 @@ Story Whirl is a full-stack web application that transforms plain text into whim
 - **Demo Account**: Added demo@gmail.com for easy testing
 - **Database Migration**: Updated schema to support premium features and story limits
 - **UI/UX Improvements**: Fixed image display, enhanced navigation, added progress indicators
+- **Layout Improvements**: Compact header, horizontal character selection, recent stories under input
+- **Enhanced TTS**: ElevenLabs premium voices with OpenAI and browser TTS fallbacks
+- **Single Column Layout**: Improved mobile-friendly design with better content flow
 
 # User Preferences
 
