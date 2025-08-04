@@ -5,11 +5,22 @@ import { insertStorySchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
 
-// Configure OpenAI for TTS
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY,
-  baseURL: process.env.OPENAI_API_KEY ? undefined : "https://openrouter.ai/api/v1"
-});
+// Configure OpenAI for TTS - only initialize when needed
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openai) {
+    const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OpenAI API key is required. Please set OPENAI_API_KEY or OPENROUTER_API_KEY environment variable.");
+    }
+    openai = new OpenAI({
+      apiKey: apiKey,
+      baseURL: process.env.OPENAI_API_KEY ? undefined : "https://openrouter.ai/api/v1"
+    });
+  }
+  return openai;
+}
 
 const generateStoryRequestSchema = z.object({
   text: z.string().min(1),
@@ -192,7 +203,8 @@ Keep the story under 400 words.`;
       let audioUrl = null;
       if (process.env.OPENAI_API_KEY) {
         try {
-          const mp3 = await openai.audio.speech.create({
+          const openaiClient = getOpenAIClient();
+          const mp3 = await openaiClient.audio.speech.create({
             model: "tts-1",
             voice: settings.voice as any,
             input: story.outputStory,
