@@ -134,7 +134,7 @@ Keep the story under 400 words.`;
     }
   });
 
-  // Get user info
+  // Get user info - create if doesn't exist
   app.get("/api/me", async (req, res) => {
     const userId = req.headers['x-user-id'] as string;
     
@@ -143,9 +143,17 @@ Keep the story under 400 words.`;
     }
 
     try {
-      const user = await storage.getUser(userId);
+      let user = await storage.getUser(userId);
+      
+      // If user doesn't exist, create them (for demo purposes)
       if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+        const email = userId.includes('@') ? userId : `${userId}@demo.com`;
+        user = await storage.createUserWithId(userId, {
+          email: email,
+          name: email.split('@')[0],
+          isPremium: "false",
+          storiesGenerated: "0"
+        });
       }
       
       res.json(user);

@@ -5,6 +5,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createUserWithId(userId: string, user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User>;
   getUserStories(userId: string, limit?: number): Promise<Story[]>;
   createStory(story: InsertStory): Promise<Story>;
@@ -40,6 +41,20 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.users.set(id, user);
+    return user;
+  }
+
+  // Create user with specific ID for demo purposes
+  async createUserWithId(userId: string, insertUser: InsertUser): Promise<User> {
+    const user: User = { 
+      ...insertUser,
+      name: insertUser.name || null,
+      isPremium: insertUser.isPremium || "false",
+      storiesGenerated: insertUser.storiesGenerated || "0",
+      id: userId,
+      createdAt: new Date()
+    };
+    this.users.set(userId, user);
     return user;
   }
 
