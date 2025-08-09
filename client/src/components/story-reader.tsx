@@ -2,20 +2,23 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, Download, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { MagicalAudio } from './magical-audio';
 
 interface StoryReaderProps {
   story: string;
   character: string;
   storyId?: string;
   userId?: string;
+  usedFallback?: boolean;
 }
 
-export function StoryReader({ story, character, storyId, userId }: StoryReaderProps) {
+export function StoryReader({ story, character, storyId, userId, usedFallback }: StoryReaderProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentParagraph, setCurrentParagraph] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [showMagicalBackground, setShowMagicalBackground] = useState(false);
+  const [audioProvider, setAudioProvider] = useState<string>('none');
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
 
@@ -46,6 +49,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
 
       const result = await response.json();
       if (result.audioUrl) {
+        setAudioProvider(result.provider || 'unknown');
         if (result.audioUrl === 'browser-tts') {
           // Use browser TTS as fallback
           playBrowserTTS();
@@ -120,6 +124,7 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
       window.speechSynthesis.cancel();
       
       const utterance = new SpeechSynthesisUtterance(story);
+      setAudioProvider('browser');
       
       // Character-specific voice settings
       const voiceSettings = {
@@ -191,6 +196,41 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
 
   return (
     <div className="space-y-6">
+      {/* TTS Provider Indicator */}
+      {audioProvider !== 'none' && (
+        <div className="text-center mb-4">
+          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 border border-purple-200">
+            {audioProvider === 'elevenlabs' && (
+              <>
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                Premium ElevenLabs Voice
+              </>
+            )}
+            {audioProvider === 'openai' && (
+              <>
+                <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                OpenAI Voice
+              </>
+            )}
+            {audioProvider === 'browser' && (
+              <>
+                <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+                Browser Text-to-Speech
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {usedFallback && (
+        <div className="text-center mb-4">
+          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 border border-orange-200">
+            <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+            Generated using backup storytelling system
+          </div>
+        </div>
+      )}
+
       {/* Audio Controls */}
       <div className="flex flex-wrap gap-3 justify-center">
         {!audioUrl ? (
@@ -231,15 +271,17 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
                 </>
               )}
             </Button>
-            <Button
-              onClick={downloadAudio}
-              variant="outline"
-              className="border-purple-200 text-purple-700 hover:bg-purple-50"
-              data-testid="button-download-audio"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download MP3
-            </Button>
+            {audioUrl && audioUrl !== 'browser-tts' && (
+              <Button
+                onClick={downloadAudio}
+                variant="outline"
+                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                data-testid="button-download-audio"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download MP3
+              </Button>
+            )}
           </>
         )}
       </div>
@@ -286,6 +328,9 @@ export function StoryReader({ story, character, storyId, userId }: StoryReaderPr
           className="hidden"
         />
       )}
+
+      {/* Magical background audio during storytelling */}
+      <MagicalAudio isPlaying={isPlaying} volume={0.1} />
     </div>
   );
 }

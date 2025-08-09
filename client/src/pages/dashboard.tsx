@@ -359,6 +359,7 @@ ${userDetails?.isPremium === "true" ? "Premium: Up to 20,000 characters" : "Free
                       character={selectedCharacter}
                       storyId={currentStoryId || undefined}
                       userId={user?.id}
+                      usedFallback={false}
                     />
                     
                     <Button

@@ -2,7 +2,17 @@
 
 Story Whirl is a full-stack web application that transforms plain text into whimsical, narrated children's stories using AI. Users can input any text, select from three distinct storytelling characters (Lumi the Owl, Sir Spark the Fox, or Bella the Bot), and receive a magical story adaptation with optional audio narration. The application features a fantasy-themed UI with magical animations, user authentication via Replit Auth, and AI-powered story generation through OpenRouter API.
 
-## Recent Updates (2025-01-04)
+## Recent Updates (2025-01-09)
+
+- **Migration to Replit**: Successfully migrated from Replit Agent to standard Replit environment
+- **Robust Fallback System**: Added comprehensive story generation fallbacks using template system
+- **Enhanced Audio Features**: Added audio download capability and TTS provider indicators
+- **Background Audio**: Implemented magical ambient background music during story reading
+- **Provider Indicators**: Visual indicators showing which TTS service is being used (ElevenLabs/OpenAI/Browser)
+- **Comprehensive Documentation**: Added detailed README.md with setup instructions and architecture overview
+- **Improved Error Handling**: Enhanced error boundaries and graceful degradation for all services
+
+## Previous Updates (2025-01-04)
 
 - **App Rebranding**: Renamed from "StoryMagic AI" to "Story Whirl"
 - **Authentication Migration**: Replaced Supabase Auth with Replit Auth for better reliability
