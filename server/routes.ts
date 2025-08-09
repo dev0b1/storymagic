@@ -379,7 +379,29 @@ Keep the story under 400 words.`;
           });
 
           const buffer = Buffer.from(await mp3.arrayBuffer());
-          audioUrl = `data:audio/mp3;base64,${buffer.toString('base64')}`;
+          
+          // Save TTS audio to temp file for mixing
+          const tempDir = path.join(process.cwd(), 'tmp');
+          await fs.mkdir(tempDir, { recursive: true });
+          const ttsFile = path.join(tempDir, `tts_${Date.now()}.mp3`);
+          await fs.writeFile(ttsFile, buffer);
+
+          // Estimate duration and create background music
+          const wordCount = story.outputStory.split(' ').length;
+          const estimatedDuration = Math.ceil(wordCount / 150 * 60);
+          const backgroundFile = await createBackgroundMusic(estimatedDuration);
+          
+          // Mix with background music
+          const finalFile = await mixAudioWithBackground(ttsFile, backgroundFile);
+          const finalBuffer = await fs.readFile(finalFile);
+          
+          // Clean up temp files
+          try {
+            await fs.unlink(ttsFile);
+            if (finalFile !== ttsFile) await fs.unlink(finalFile);
+          } catch (e) {}
+          
+          audioUrl = `data:audio/mp3;base64,${finalBuffer.toString('base64')}`;
           provider = 'openai';
         } catch (error) {
           console.error('OpenAI TTS error:', error);

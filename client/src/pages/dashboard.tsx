@@ -58,10 +58,11 @@ export default function Dashboard() {
   }, [serverUser]);
 
   // Fetch user stories
-  const { data: stories = [] } = useQuery<Story[]>({
+  const { data: stories = [], refetch: refetchStories } = useQuery<Story[]>({
     queryKey: ['/api/stories'],
     enabled: !!user,
     retry: false,
+    staleTime: 0, // Always refetch to get latest stories
     queryFn: async () => {
       const response = await fetch('/api/stories', {
         headers: { 'x-user-id': user!.id }
@@ -98,9 +99,15 @@ export default function Dashboard() {
       setGeneratedStory(data.story);
       setCurrentStoryId(data.storyId || data.id); // Try both possible ID fields
       
-      // Invalidate queries to refresh data
+      // Force refresh of recent stories and user data
       queryClient.invalidateQueries({ queryKey: ['/api/stories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/me'] });
+      
+      // Also refetch immediately to update UI
+      setTimeout(() => {
+        refetchStories();
+        queryClient.refetchQueries({ queryKey: ['/api/me'] });
+      }, 500);
       
       toast({
         title: "✨ Story Generated!",
