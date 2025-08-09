@@ -5,6 +5,35 @@ import { insertStorySchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
 
+// Fallback story generation function
+function generateFallbackStory(inputText: string, character: string): string {
+  const storyTemplates = {
+    lumi: [
+      "Once upon a time, in a mystical forest where ancient trees whispered secrets to the wind, there lived a wise owl named Lumi. One day, Lumi discovered something remarkable related to {input}. Through patient observation and careful thought, Lumi learned an important lesson about wisdom and understanding. The forest creatures gathered around as Lumi shared this newfound knowledge, and they all lived more harmoniously ever after.",
+      "In the quiet hours before dawn, when the world was painted in shades of silver and blue, Lumi the Owl noticed something special about {input}. With her keen eyes and thoughtful nature, she explored this discovery, learning valuable lessons about patience and wisdom along the way. The other woodland creatures were amazed by her insights, and together they created a more peaceful and understanding community."
+    ],
+    spark: [
+      "Brave Sir Spark the Fox, with coat so bright and bold, discovered something grand about {input}, a tale that must be told! He leaped and bounded through the glade, his spirit fierce and free, learning lessons of courage and friendship, as happy as can be! The forest rang with joyful songs, as all the creatures cheered, for Spark had shown them something new, that filled their hearts with cheer!",
+      "In a land of rolling hills and streams that sparkle in the sun, lived Spark the Fox so brave and true, whose adventures had begun! He found something amazing about {input}, and with courage in his heart, he shared his discoveries with friends, each playing their own part! Together they learned and grew each day, their friendship strong and bright, creating magic everywhere they went, from morning until night!"
+    ],
+    bella: [
+      "Beep boop! Hello there, friends! I'm Bella the Bot, and I've got the WILDEST story about {input}! *giggles in binary* So picture this - imagine if {input} could talk, dance, and maybe even do the robot like me! I processed this information through my super-cool circuits and discovered something absolutely amazing! My LED lights are flashing with excitement because this adventure taught me that even robots can learn about friendship, creativity, and having fun! Error 404: Boring story not found!",
+      "Whirrrr, click, beep! Bella the Bot here with a totally bonkers tale about {input}! My processors are buzzing because I just computed the most incredible adventure! Imagine if {input} had special powers and could transform into anything imaginable! Through my digital dreams and electronic excitement, I learned that being different is actually super cool! My circuits are sparking with joy because this story proves that technology and imagination make the perfect team! System message: Fun levels at maximum capacity!"
+    ]
+  };
+
+  const templates = storyTemplates[character as keyof typeof storyTemplates] || storyTemplates.lumi;
+  const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+  
+  // Replace {input} placeholder with actual input text
+  let story = randomTemplate.replace(/{input}/g, inputText);
+  
+  // Add a note about using fallback
+  story += "\n\n✨ This magical story was created using our backup storytelling system to ensure you always get a wonderful tale, even when our main AI is taking a little break!";
+  
+  return story;
+}
+
 // Configure OpenAI for TTS - only initialize when needed
 let openai: OpenAI | null = null;
 
@@ -71,35 +100,44 @@ Take the following user text and turn it into a short magical story with a magic
 Make the story engaging and optionally include a subtle life lesson.
 Keep the story under 400 words.`;
 
-      // Call OpenRouter API
-      const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || 'sk-or-v1-default'}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000',
-          'X-Title': 'Story Whirl'
-        },
-        body: JSON.stringify({
-          model: 'mistralai/mistral-small-3.2-24b-instruct:free',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `User input: "${text}"` }
-          ],
-          max_tokens: 600,
-          temperature: 0.8
-        })
-      });
+      let generatedStory = null;
+      let usedFallback = false;
 
-      if (!openRouterResponse.ok) {
-        throw new Error(`OpenRouter API error: ${openRouterResponse.status}`);
-      }
+      // Try OpenRouter API first
+      try {
+        const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000',
+            'X-Title': 'Story Whirl'
+          },
+          body: JSON.stringify({
+            model: 'mistralai/mistral-small-3.2-24b-instruct:free',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `User input: "${text}"` }
+            ],
+            max_tokens: 600,
+            temperature: 0.8
+          })
+        });
 
-      const openRouterData = await openRouterResponse.json();
-      const generatedStory = openRouterData.choices?.[0]?.message?.content;
-
-      if (!generatedStory) {
-        throw new Error('No story generated from API');
+        if (openRouterResponse.ok) {
+          const openRouterData = await openRouterResponse.json();
+          generatedStory = openRouterData.choices?.[0]?.message?.content;
+        }
+        
+        if (!generatedStory) {
+          throw new Error('No story content from OpenRouter API');
+        }
+      } catch (openRouterError) {
+        console.error('OpenRouter API failed:', openRouterError);
+        
+        // Fallback: Generate story using template system
+        usedFallback = true;
+        generatedStory = generateFallbackStory(text, character);
       }
 
       // Save story and update count if user is logged in
@@ -124,7 +162,8 @@ Keep the story under 400 words.`;
         story: generatedStory,
         character,
         storyId: savedStory?.id,
-        savedStory
+        savedStory,
+        usedFallback: usedFallback
       });
 
     } catch (error) {
