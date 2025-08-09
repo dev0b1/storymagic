@@ -329,8 +329,7 @@ export function StoryReader({ story, character, storyId, userId, usedFallback }:
         />
       )}
 
-      {/* Magical background audio during storytelling */}
-      <MagicalAudio isPlaying={isPlaying} volume={0.1} />
+      {/* Background music is now mixed server-side with TTS audio */}
     </div>
   );
 }

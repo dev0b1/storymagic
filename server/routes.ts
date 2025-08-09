@@ -4,6 +4,10 @@ import { storage } from "./storage";
 import { insertStorySchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs/promises';
+import path from 'path';
 
 // Fallback story generation function
 function generateFallbackStory(inputText: string, character: string): string {
@@ -32,6 +36,54 @@ function generateFallbackStory(inputText: string, character: string): string {
   story += "\n\n✨ This magical story was created using our backup storytelling system to ensure you always get a wonderful tale, even when our main AI is taking a little break!";
   
   return story;
+}
+
+const execAsync = promisify(exec);
+
+// Create background music using ffmpeg and audio synthesis
+async function createBackgroundMusic(durationSeconds: number): Promise<string> {
+  const tempDir = path.join(process.cwd(), 'tmp');
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  const backgroundFile = path.join(tempDir, `bg_${Date.now()}.wav`);
+  
+  // Create a gentle, magical background tone using ffmpeg's audio synthesis
+  const command = `ffmpeg -f lavfi -i "sine=frequency=220:duration=${durationSeconds}" -f lavfi -i "sine=frequency=330:duration=${durationSeconds}" -f lavfi -i "sine=frequency=440:duration=${durationSeconds}" -filter_complex "[0:a]volume=0.02[a1];[1:a]volume=0.015[a2];[2:a]volume=0.01[a3];[a1][a2][a3]amix=inputs=3:duration=longest:dropout_transition=2[out]" -map "[out]" -y "${backgroundFile}"`;
+  
+  try {
+    await execAsync(command);
+    return backgroundFile;
+  } catch (error) {
+    console.log('Background music generation failed, continuing without it:', error);
+    return '';
+  }
+}
+
+// Mix TTS audio with background music using ffmpeg
+async function mixAudioWithBackground(ttsFile: string, backgroundFile: string): Promise<string> {
+  if (!backgroundFile) return ttsFile;
+  
+  const tempDir = path.join(process.cwd(), 'tmp');
+  const outputFile = path.join(tempDir, `mixed_${Date.now()}.mp3`);
+  
+  // Mix the TTS (louder) with background music (quieter)
+  const command = `ffmpeg -i "${ttsFile}" -i "${backgroundFile}" -filter_complex "[0:a]volume=1.0[tts];[1:a]volume=0.3[bg];[tts][bg]amix=inputs=2:duration=first:dropout_transition=2" -c:a libmp3lame -b:a 128k -y "${outputFile}"`;
+  
+  try {
+    await execAsync(command);
+    
+    // Clean up temp files
+    try {
+      await fs.unlink(backgroundFile);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    
+    return outputFile;
+  } catch (error) {
+    console.log('Audio mixing failed, returning original TTS:', error);
+    return ttsFile;
+  }
 }
 
 // Configure OpenAI for TTS - only initialize when needed
@@ -277,7 +329,29 @@ Keep the story under 400 words.`;
 
           if (elevenLabsResponse.ok) {
             const audioBuffer = await elevenLabsResponse.arrayBuffer();
-            audioUrl = `data:audio/mpeg;base64,${Buffer.from(audioBuffer).toString('base64')}`;
+            
+            // Save TTS audio to temp file for mixing
+            const tempDir = path.join(process.cwd(), 'tmp');
+            await fs.mkdir(tempDir, { recursive: true });
+            const ttsFile = path.join(tempDir, `tts_${Date.now()}.mp3`);
+            await fs.writeFile(ttsFile, Buffer.from(audioBuffer));
+
+            // Estimate duration and create background music
+            const wordCount = story.outputStory.split(' ').length;
+            const estimatedDuration = Math.ceil(wordCount / 150 * 60);
+            const backgroundFile = await createBackgroundMusic(estimatedDuration);
+            
+            // Mix with background music
+            const finalFile = await mixAudioWithBackground(ttsFile, backgroundFile);
+            const finalBuffer = await fs.readFile(finalFile);
+            
+            // Clean up temp files
+            try {
+              await fs.unlink(ttsFile);
+              if (finalFile !== ttsFile) await fs.unlink(finalFile);
+            } catch (e) {}
+            
+            audioUrl = `data:audio/mpeg;base64,${finalBuffer.toString('base64')}`;
             provider = 'elevenlabs';
           }
         } catch (error) {
