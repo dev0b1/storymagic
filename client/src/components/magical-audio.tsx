@@ -3,74 +3,153 @@ import { useRef, useEffect } from 'react';
 interface MagicalAudioProps {
   isPlaying: boolean;
   volume?: number;
+  character?: string;
 }
 
-export function MagicalAudio({ isPlaying, volume = 0.2 }: MagicalAudioProps) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+export function MagicalAudio({ isPlaying, volume = 0.2, character = 'lumi' }: MagicalAudioProps) {
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorsRef = useRef<OscillatorNode[]>([]);
+  const gainNodesRef = useRef<GainNode[]>([]);
+  const lfoRef = useRef<OscillatorNode | null>(null);
 
-  // Generate a simple magical ambient tone using Web Audio API
+  // Character-specific ambient sound profiles
+  const characterProfiles = {
+    lumi: {
+      frequencies: [220, 330, 440], // Warm, gentle tones
+      volume: 0.15,
+      modulation: 0.3
+    },
+    spark: {
+      frequencies: [440, 550, 660], // Bright, energetic tones
+      volume: 0.2,
+      modulation: 0.5
+    },
+    bella: {
+      frequencies: [196, 293, 392], // Soft, melodic tones
+      volume: 0.12,
+      modulation: 0.2
+    }
+  };
+
+  const profile = characterProfiles[character as keyof typeof characterProfiles] || characterProfiles.lumi;
+
   useEffect(() => {
-    let audioContext: AudioContext;
-    let oscillator: OscillatorNode;
-    let gainNode: GainNode;
-
-    const createMagicalTone = () => {
+    const createMagicalAmbience = async () => {
       try {
-        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        
-        // Create oscillator for magical tone
-        oscillator = audioContext.createOscillator();
-        gainNode = audioContext.createGain();
+        // Create Audio Context if not exists
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+
+        // Resume context if suspended
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+
+        // Create multiple oscillators for richer sound
+        profile.frequencies.forEach((freq, index) => {
+          const oscillator = audioContextRef.current!.createOscillator();
+          const gainNode = audioContextRef.current!.createGain();
         
         // Connect nodes
         oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+          gainNode.connect(audioContextRef.current!.destination);
         
-        // Set up magical frequency (around 220Hz with subtle variations)
-        oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+          // Set frequency and type
+          oscillator.frequency.setValueAtTime(freq, audioContextRef.current!.currentTime);
         oscillator.type = 'sine';
         
-        // Very quiet background volume
-        gainNode.gain.setValueAtTime(volume * 0.3, audioContext.currentTime);
+          // Set volume with slight variation per oscillator
+          const baseVolume = profile.volume * volume;
+          const volumeVariation = baseVolume * (0.8 + (index * 0.2));
+          gainNode.gain.setValueAtTime(volumeVariation, audioContextRef.current!.currentTime);
+          
+          oscillatorsRef.current.push(oscillator);
+          gainNodesRef.current.push(gainNode);
+        });
+
+        // Create LFO for subtle modulation
+        lfoRef.current = audioContextRef.current.createOscillator();
+        const lfoGain = audioContextRef.current.createGain();
+        lfoRef.current.frequency.setValueAtTime(0.3, audioContextRef.current.currentTime); // Very slow modulation
+        lfoGain.gain.setValueAtTime(profile.modulation, audioContextRef.current.currentTime);
+        lfoRef.current.connect(lfoGain);
         
-        // Add subtle frequency modulation for magical effect
-        const lfo = audioContext.createOscillator();
-        const lfoGain = audioContext.createGain();
-        lfo.frequency.setValueAtTime(0.5, audioContext.currentTime); // Slow modulation
-        lfoGain.gain.setValueAtTime(10, audioContext.currentTime); // Subtle pitch variation
-        lfo.connect(lfoGain);
-        lfoGain.connect(oscillator.frequency);
-        
-        if (isPlaying) {
-          oscillator.start();
-          lfo.start();
-        }
-        
-        return { audioContext, oscillator, gainNode, lfo };
+        // Apply modulation to all oscillators
+        oscillatorsRef.current.forEach(osc => {
+          lfoGain.connect(osc.frequency);
+        });
+
+        // Start all oscillators
+        oscillatorsRef.current.forEach(osc => osc.start());
+        lfoRef.current.start();
+
       } catch (error) {
-        console.log('Web Audio API not supported, falling back to silent mode');
-        return null;
+        console.log('Web Audio API not supported or blocked:', error);
       }
     };
 
-    let audioNodes: ReturnType<typeof createMagicalTone> = null;
+    const stopMagicalAmbience = () => {
+      try {
+        oscillatorsRef.current.forEach(osc => {
+          try {
+            osc.stop();
+          } catch (e) {
+            // Oscillator already stopped
+          }
+        });
+        if (lfoRef.current) {
+          try {
+            lfoRef.current.stop();
+          } catch (e) {
+            // LFO already stopped
+          }
+        }
+        oscillatorsRef.current = [];
+        gainNodesRef.current = [];
+        lfoRef.current = null;
+      } catch (error) {
+        console.log('Error stopping audio:', error);
+      }
+    };
 
     if (isPlaying) {
-      audioNodes = createMagicalTone();
+      createMagicalAmbience();
+    } else {
+      stopMagicalAmbience();
     }
 
     return () => {
-      if (audioNodes) {
-        try {
-          audioNodes.oscillator?.stop();
-          audioNodes.lfo?.stop();
-          audioNodes.audioContext?.close();
+      stopMagicalAmbience();
+    };
+  }, [isPlaying, volume, character, profile]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        oscillatorsRef.current.forEach(osc => {
+          try {
+            osc.stop();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        });
+        if (lfoRef.current) {
+          try {
+            lfoRef.current.stop();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        }
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+        }
         } catch (error) {
           // Ignore cleanup errors
-        }
       }
     };
-  }, [isPlaying, volume]);
+  }, []);
 
   return null; // This component doesn't render anything visible
 }

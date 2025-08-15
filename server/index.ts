@@ -1,8 +1,60 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { config, hasValidApiKeys } from './config.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = config.port;
+
+// Log configuration status on startup
+console.log('🚀 StoryMagic AI Server Starting...');
+console.log('=====================================');
+
+// Check if .env file exists
+const envPath = path.join(__dirname, '..', '.env');
+const envExists = fs.existsSync(envPath);
+console.log(`📁 .env file: ${envExists ? '✅ Found' : '❌ Not found'}`);
+
+if (envExists) {
+  try {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const lines = envContent.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+    console.log(`📋 Environment variables loaded: ${lines.length}`);
+    
+        // Check specific API keys
+    const hasKeys = hasValidApiKeys();
+    console.log(`🔑 OpenRouter API: ${hasKeys.openRouter ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`🎵 ElevenLabs API: ${hasKeys.elevenLabs ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`🤖 OpenAI API: ${hasKeys.openAI ? '✅ Configured' : '❌ Not configured'}`);
+    
+    // Initialize database
+    console.log('\n🗄️ Checking database...');
+    import('./supabase.js').then(async ({ db }) => {
+      const isValid = await db.validateDatabase();
+      if (!isValid) {
+        console.log('🛠️ Setting up database...');
+        await db.setupDatabase();
+      }
+    }).catch(error => {
+      console.error('❌ Database initialization failed:', error);
+    });
+  } catch (error) {
+    console.log('❌ Error reading .env file:', error instanceof Error ? error.message : String(error));
+  }
+} else {
+  console.log('💡 Tip: Create a .env file with your API keys');
+}
+
+console.log(`🌐 Server will start on port: ${PORT}`);
+console.log('=====================================\n');
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -57,15 +109,17 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
+  // Other ports are firewalled. Default to 3000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  const port = PORT; // Use config port instead of process.env.PORT
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    console.log(`🚀 Server running on port ${port}`);
+    console.log(`📱 Frontend: http://localhost:${port}`);
+    console.log(`🔌 API: http://localhost:${port}/api`);
   });
+
 })();

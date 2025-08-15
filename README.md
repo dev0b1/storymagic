@@ -1,289 +1,371 @@
-# Story Whirl 🌟
+# StoryMagic AI ✨
 
-A magical full-stack web application that transforms plain text into whimsical, narrated children's stories using AI. Built with React, TypeScript, Express, and integrated with OpenRouter API for story generation.
+Transform boring PDFs and text into immersive, narrated stories with professional AI storytelling and ambient audio.
 
-## ✨ Features
+## 🚀 Features
 
-- **AI Story Generation**: Transform any text into magical stories using OpenRouter API with fallback templates
-- **Character Personalities**: Choose from 3 unique storytellers:
-  - **Lumi the Owl**: Wise, calm, and educational storyteller
-  - **Sir Spark the Fox**: Bold, poetic storyteller who speaks in rhyme
-  - **Bella the Bot**: Fast, funny, cheeky storyteller with wild imagination
-- **Text-to-Speech**: Multi-provider audio narration with character-specific voices
-  - Premium: ElevenLabs voices (if API key provided)
-  - Standard: OpenAI TTS (if API key provided)
-  - Fallback: Browser speech synthesis
-- **Audio Downloads**: Save generated audio as MP3 files
-- **User Authentication**: Replit Auth integration with demo account
-- **Story Limits**: Free users (2 stories), Premium users (unlimited)
-- **Real-time Features**: Auto-scrolling story display with paragraph highlighting
-- **Responsive Design**: Mobile-friendly UI with magical animations
+### 📄 PDF to Story Conversion
+- **Upload any PDF** and transform it into engaging, narrated content
+- **Content Type Detection** - AI automatically detects academic, business, technical, historical, or creative content
+- **Adaptive Storytelling** - Professional narration modes based on content type
+- **Educational Output** - Meaningful, context-aware stories that preserve factual accuracy
+
+### 🎭 Professional Narration Modes
+- **📚 Focus Mode** - Facts-only, professional delivery for reports and technical docs
+- **⚖️ Balanced Mode** - Natural + informative (default) for most content
+- **🎭 Engaging Mode** - Storytelling when appropriate for history and biographies
+- **Smart Content Detection** - AI automatically adapts storytelling approach
+
+### 🎵 Immersive Audio Experience
+- **Dynamic Background Music** - Ambient sounds that adapt to narration mode
+- **Multiple TTS Providers** - ElevenLabs (premium), OpenAI, and browser synthesis
+- **Toggle Controls** - Turn ambient audio on/off as needed
+- **Audio Download** - Save stories as MP3 files with background music
+
+### 🎨 Enhanced UI/UX
+- **Beautiful Landing Page** - Showcases all features with interactive demos
+- **Professional Design** - Modern, clean interface with subtle animations
+- **Responsive Layout** - Works perfectly on desktop and mobile
+- **Streamlined PDF Upload** - Simple icon button under text input
+
+### 💾 Persistent Storage
+- **Supabase Database** - Real user data and story history
+- **User Management** - Track story generation limits and preferences
+- **Story History** - Access and replay previous stories
+- **Premium Features** - Pro user limits and capabilities
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for fast development
+- **Tailwind CSS** for styling
+- **Radix UI** + shadcn/ui components
+- **Wouter** for routing
+- **React Query** for data fetching
+- **Web Audio API** for ambient sounds
+
+### Backend
+- **Node.js** with Express
+- **TypeScript** for type safety
+- **Supabase** for database and user management
+- **OpenRouter API** for AI story generation
+- **FFmpeg** for audio processing
+- **ElevenLabs + OpenAI** for TTS
+
+### AI & Audio
+- **Mistral AI** models for story generation
+- **ElevenLabs** for premium TTS voices
+- **OpenAI TTS** as fallback
+- **Browser Speech Synthesis** for demo users
+- **FFmpeg** for audio mixing and background music
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Node.js 18+ 
+- FFmpeg installed and in PATH
+- Supabase account and project
 
-- Node.js 20+ installed
-- OpenRouter API key (required for AI story generation)
-- Optional: OpenAI API key (for enhanced TTS)
-- Optional: ElevenLabs API key (for premium voices)
+### Installation
 
-### Installation from GitHub
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd storymagic
+   ```
 
+2. **Install dependencies**
 ```bash
-# Clone the repository
-git clone <your-github-repo-url>
-cd story-whirl
-
-# Install dependencies
 npm install
+   ```
 
-# Set up environment variables
-# Create a .env file in the root directory with:
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here  # Optional
-ELEVENLABS_API_KEY=your_elevenlabs_key_here  # Optional
+3. **Set up environment variables**
 
-# Start the development server
-npm run dev
-```
+   **`server/.env`:**
+   ```env
+   # Supabase Configuration
+   SUPABASE_URL=your_supabase_project_url
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-### Get API Keys
+   # AI APIs
+   OPENROUTER_API_KEY=your_openrouter_api_key
+   OPENAI_API_KEY=your_openai_api_key
 
-1. **OpenRouter API Key** (Required):
-   - Visit [openrouter.ai](https://openrouter.ai)
-   - Create an account
-   - Get your API key from the dashboard
-   - Add it to your environment variables
+   # TTS APIs
+   ELEVENLABS_API_KEY=your_elevenlabs_api_key
 
-2. **OpenAI API Key** (Optional for enhanced TTS):
-   - Visit [platform.openai.com](https://platform.openai.com)
-   - Create an account and get API key
-   - Add it to your environment variables
+   # Optional
+   REPLIT_DOMAINS=your_domain.com
+   ```
 
-3. **ElevenLabs API Key** (Optional for premium voices):
-   - Visit [elevenlabs.io](https://elevenlabs.io)
-   - Create an account and get API key
-   - Add it to your environment variables
+   **`client/.env`:**
+   ```env
+   VITE_API_URL=http://localhost:3000
+   ```
 
-## 🏗️ Architecture
+4. **Set up Supabase Database**
 
-### Frontend (React + TypeScript)
-```
-client/src/
-├── components/          # Reusable UI components
-│   ├── ui/             # shadcn/ui component library
-│   ├── character-card.tsx
-│   ├── story-reader.tsx # Audio playback and story display
-│   └── ...
-├── pages/              # Route components
-│   ├── dashboard.tsx   # Main story generation interface
-│   ├── auth.tsx        # Authentication page
-│   └── landing.tsx     # Landing page
-├── lib/                # Utility libraries
-│   ├── auth.ts         # Authentication service
-│   ├── queryClient.ts  # React Query configuration
-│   └── utils.ts        # General utilities
-└── hooks/              # Custom React hooks
-```
+   Run this SQL in your Supabase SQL Editor:
 
-### Backend (Express + TypeScript)
-```
-server/
-├── index.ts            # Application entry point
-├── routes.ts           # API route definitions
-├── storage.ts          # Data storage interface
-├── db.ts              # Database configuration
-└── vite.ts            # Vite integration for development
-```
+   ```sql
+   -- Create users table
+   CREATE TABLE IF NOT EXISTS users (
+     id TEXT PRIMARY KEY,
+     email TEXT UNIQUE NOT NULL,
+     name TEXT,
+     is_premium BOOLEAN DEFAULT FALSE,
+     stories_generated INTEGER DEFAULT 0,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
 
-### Database Schema
-```
-shared/schema.ts        # Shared type definitions and Drizzle schema
+   -- Create stories table
+   CREATE TABLE IF NOT EXISTS stories (
+     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+     user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+     input_text TEXT NOT NULL,
+     output_story TEXT NOT NULL,
+     narration_mode TEXT NOT NULL DEFAULT 'balanced',
+     content_type TEXT DEFAULT 'general',
+     source TEXT DEFAULT 'text',
+     story_id TEXT,
+     used_fallback BOOLEAN DEFAULT FALSE,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
 
-Tables:
-- users: User profiles with premium status and story counts
-- stories: Generated stories with user associations
-```
+   -- Create indexes
+   CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
+   CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at DESC);
+   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
-## 📡 API Endpoints
+   -- Enable RLS
+   ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
 
-### Authentication
-- `POST /api/demo-login` - Demo account login
-- `POST /api/user` - Create/get user account
-- `GET /api/me` - Get current user info
+   -- RLS Policies (adjust based on your auth setup)
+   CREATE POLICY "Users can view their own data" ON users
+     FOR SELECT USING (true);
 
-### Story Generation
-- `POST /api/story` - Generate new story
-  - Body: `{ text: string, character: string, userId?: string }`
-  - Response: `{ story: string, character: string, storyId?: string, usedFallback: boolean }`
+   CREATE POLICY "Users can update their own data" ON users
+     FOR UPDATE USING (true);
 
-### Story Management
-- `GET /api/stories` - Get user's stories (latest 3)
-- `POST /api/story/:id/audio` - Generate audio for story
+   CREATE POLICY "Users can insert their own data" ON users
+     FOR INSERT WITH CHECK (true);
 
-## 🎯 Development Workflow
+   CREATE POLICY "Users can view their own stories" ON stories
+     FOR SELECT USING (true);
 
-### Available Scripts
+   CREATE POLICY "Users can insert their own stories" ON stories
+     FOR INSERT WITH CHECK (true);
 
-```bash
-# Development
-npm run dev          # Start development server (frontend + backend)
+   CREATE POLICY "Users can update their own stories" ON stories
+     FOR UPDATE USING (true);
 
-# Production
-npm run build        # Build for production
-npm start           # Start production server
+   CREATE POLICY "Users can delete their own stories" ON stories
+     FOR DELETE USING (true);
 
-# Database
-npm run db:push     # Push database schema changes
+   -- Auto-update timestamps
+   CREATE OR REPLACE FUNCTION update_updated_at_column()
+   RETURNS TRIGGER AS $$
+   BEGIN
+       NEW.updated_at = NOW();
+       RETURN NEW;
+   END;
+   $$ language 'plpgsql';
 
-# Type checking
-npm run check       # TypeScript type checking
-```
+   CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-### Development Features
+   CREATE TRIGGER update_stories_updated_at BEFORE UPDATE ON stories
+       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   ```
 
-- **Hot Module Replacement**: Instant updates during development
-- **Concurrent Servers**: Frontend (Vite) and backend (Express) run together
-- **Type Safety**: Full TypeScript coverage across frontend and backend
-- **Error Handling**: Comprehensive error boundaries and fallback systems
+5. **Start the development servers**
+   ```bash
+   npm run dev
+   ```
+   
+   This starts both frontend (port 5173) and backend (port 3000) simultaneously.
 
-## 🛠️ Technology Stack
+6. **Open your browser**
+   Navigate to [http://localhost:5173](http://localhost:5173)
 
-### Core Technologies
-- **Frontend**: React 18, TypeScript, Vite
-- **Backend**: Express.js, Node.js, TypeScript
-- **Database**: PostgreSQL with Neon Database hosting
-- **ORM**: Drizzle ORM with Zod validation
+## 📖 Usage Guide
 
-### UI & Styling
-- **Design System**: shadcn/ui components built on Radix UI
-- **Styling**: Tailwind CSS with custom magical theme
-- **Icons**: Lucide React icons
-- **Animations**: Framer Motion, custom CSS animations
-- **Typography**: Macondo font for magical elements
+### Demo Login
+- Click "Try Demo" for instant access
+- No registration required
+- Full access to all features
 
-### External Services
-- **AI Generation**: OpenRouter API (Claude/Mistral models)
-- **Text-to-Speech**: ElevenLabs (premium), OpenAI TTS, Browser Speech API
-- **Authentication**: Replit Auth
-- **Database Hosting**: Neon Database
+### Creating Stories
 
-### Development Tools
-- **Build Tool**: Vite with React plugin
-- **Package Manager**: npm
-- **Code Quality**: TypeScript strict mode
-- **State Management**: React Query for server state, React hooks for local state
+#### From Text
+1. Enter your text in the input field
+2. Choose your narration mode (Focus, Balanced, or Engaging)
+3. Click "Generate Magical Story"
+4. Listen with ambient audio
+
+#### From PDF
+1. Click "Upload PDF" button under the text input
+2. Select a PDF file (max 5MB for free users, 20MB for premium)
+3. AI automatically detects content type
+4. Choose your preferred narration mode
+5. Generate an immersive story
+
+### Audio Controls
+- **Toggle Ambient Audio** - Turn background music on/off
+- **Mode-Specific Sounds** - Each narration mode has unique audio profiles
+- **Audio Download** - Save stories as MP3 files
+- **Multiple TTS Options** - Premium voices for pro users
+
+## 🎯 Use Cases
+
+### For Students
+- Transform study materials into engaging stories
+- Make complex topics easier to understand
+- Create memorable learning experiences
+
+### For Professionals
+- Convert reports and documents into compelling narratives
+- Present technical information in an accessible way
+- Create engaging presentations
+
+### For Educators
+- Design interactive lessons
+- Make curriculum content more engaging
+- Support different learning styles
+
+### For Writers
+- Get inspiration for creative content
+- Transform research into storytelling
+- Develop new narrative approaches
 
 ## 🔧 Configuration
 
-### Environment Variables
+### User Limits
 
-```bash
-# Required
-OPENROUTER_API_KEY=your_key_here
+#### Free Users
+- 2 stories per session
+- 600 character input limit
+- 5MB PDF upload limit
+- Basic TTS (browser synthesis)
 
-# Optional (for enhanced features)
-OPENAI_API_KEY=your_key_here
-ELEVENLABS_API_KEY=your_key_here
+#### Premium Users
+- Unlimited stories
+- 20,000 character input limit
+- 20MB PDF upload limit
+- Premium TTS (ElevenLabs + OpenAI)
 
-# Database (auto-configured on Replit)
-DATABASE_URL=your_postgres_url
+### Custom Background Audio
+Add your own background music files:
+1. Place MP3 files in `assets/audio/backgrounds/`
+2. Name them according to mode: `focus.mp3`, `balanced.mp3`, `engaging.mp3`
+3. The app will automatically use your custom audio
+
+### AI Model Configuration
+Modify story generation settings in `server/routes.ts`:
+- Change AI models
+- Adjust temperature and token limits
+- Customize narration mode prompts
+
+## 📁 Project Structure
+
 ```
-
-### Database Setup
-
-The application automatically handles database schema with Drizzle ORM:
-
-```bash
-# Push schema changes to database
-npm run db:push
+storymagic/
+├── client/                 # Frontend React app
+│   ├── src/
+│   │   ├── components/     # UI components
+│   │   ├── pages/         # Page components
+│   │   ├── hooks/         # Custom React hooks
+│   │   └── lib/           # Utilities and services
+├── server/                # Backend Express app
+│   ├── routes.ts          # API endpoints
+│   ├── supabase.ts        # Database operations
+│   └── index.ts           # Server entry point
+├── shared/                # Shared types and schemas
+├── assets/                # Static assets
+│   └── audio/             # Background audio files
+└── tmp/                   # Temporary audio files
 ```
-
-### Custom Configuration
-
-1. **Story Characters**: Modify character personalities in `server/routes.ts`
-2. **UI Theme**: Update Tailwind configuration in `tailwind.config.ts`
-3. **Audio Settings**: Adjust TTS voice mappings in `components/story-reader.tsx`
 
 ## 🚀 Deployment
 
-### Replit Deployment
-
-1. Push your code to the Replit environment
-2. Ensure environment variables are set
-3. The application will automatically deploy
-
-### Manual Deployment
-
+### Frontend (Vercel/Netlify)
 ```bash
-# Build the application
 npm run build
-
-# Start production server
-npm start
+# Deploy the dist/ folder
 ```
 
-## 🎨 Customization
-
-### Adding New Characters
-
-1. Update character definitions in `components/character-card.tsx`
-2. Add character personas in `server/routes.ts`
-3. Configure TTS voice settings in `components/story-reader.tsx`
-4. Add fallback story templates in `server/routes.ts`
-
-### Modifying UI Theme
-
-1. Update color scheme in `index.css`
-2. Modify Tailwind configuration in `tailwind.config.ts`
-3. Customize component styles in respective component files
-
-### Extending Audio Features
-
-1. Add new TTS providers in `server/routes.ts`
-2. Configure voice mappings in `components/story-reader.tsx`
-3. Update provider indicators in the UI
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Story Generation Fails**
-   - Check OpenRouter API key is set correctly
-   - Verify API credits/quota
-   - Fallback templates will be used automatically
-
-2. **Audio Not Working**
-   - Check TTS provider API keys
-   - Browser TTS always available as fallback
-   - Verify browser permissions for audio
-
-3. **Database Errors**
-   - Run `npm run db:push` to sync schema
-   - Check database connection URL
-
-### Debugging
-
-- Check browser console for frontend errors
-- Check server logs for backend issues
-- Use React Query DevTools for API debugging
+### Backend (Railway/Render)
+```bash
+npm run build
+npm start
+```
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Add tests if applicable
 5. Submit a pull request
 
 ## 📄 License
 
 MIT License - see LICENSE file for details
 
-## 🔗 Links
+## 🆘 Support
 
-- [OpenRouter API Documentation](https://openrouter.ai/docs)
-- [Replit Documentation](https://docs.replit.com)
-- [shadcn/ui Components](https://ui.shadcn.com)
-- [Drizzle ORM Documentation](https://orm.drizzle.team)
+### Common Issues
+
+**Demo login fails:**
+- Check if backend is running on port 3000
+- Verify proxy configuration in `vite.config.ts`
+- Check browser console for errors
+
+**Audio not working:**
+- Ensure FFmpeg is installed and in PATH
+- Check API keys for TTS services
+- Verify browser supports Web Audio API
+
+**Database errors:**
+- Confirm Supabase credentials in `.env`
+- Check if tables exist in Supabase dashboard
+- Verify RLS policies are configured
+
+**Port conflicts:**
+```bash
+# Windows
+netstat -ano | findstr :3000
+taskkill //PID <PID> //F
+
+# Mac/Linux
+lsof -ti:3000 | xargs kill -9
+```
+
+### Development Commands
+```bash
+npm run dev          # Start both frontend and backend
+npm run build        # Build for production
+npm run preview      # Preview production build
+npm run lint         # Run ESLint
+npm run type-check   # Run TypeScript checks
+```
+
+## 🔮 Roadmap
+
+- [ ] Advanced PDF processing with OCR
+- [ ] More AI models and voices
+- [ ] Story templates and themes
+- [ ] Collaborative storytelling
+- [ ] Mobile app version
+- [ ] Advanced audio mixing
+- [ ] Story sharing and community features
+- [ ] User authentication and profiles
+- [ ] Story analytics and insights
+
+---
+
+**Made with ✨ by StoryMagic AI Team**

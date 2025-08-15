@@ -1,60 +1,100 @@
-// Simple auth service to replace Supabase
+import { supabase, isSupabaseConfigured } from './supabase';
+
 export interface User {
   id: string;
   email: string;
   name?: string;
-  isPremium?: string;
-  storiesGenerated?: string;
+  is_premium?: boolean;
+  stories_generated?: number;
 }
 
 export const authService = {
-  getCurrentUser(): User | null {
-    const userId = localStorage.getItem('userId');
-    const userEmail = localStorage.getItem('userEmail');
-    const userName = localStorage.getItem('userName');
-    
-    if (!userId || !userEmail) return null;
-    
-    return {
-      id: userId,
-      email: userEmail,
-      name: userName || undefined
-    };
-  },
-
   async signInWithMagicLink(email: string) {
-    // In a real app, this would send an email
-    // For now, we'll create a user directly
-    const response = await fetch('/api/user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name: email.split('@')[0] })
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to sign in');
+    if (!isSupabaseConfigured) {
+      return { success: false, error: new Error('Authentication is not configured') };
     }
-    
-    const user = await response.json();
-    localStorage.setItem('userId', user.id);
-    localStorage.setItem('userEmail', user.email);
-    localStorage.setItem('userName', user.name || '');
-    
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) throw error;
     return { success: true };
   },
 
+  async signInWithGoogle() {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: new Error('Authentication is not configured') };
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          prompt: 'select_account',
+        },
+      },
+    });
+
+    if (error) throw error;
+    return { success: true };
+  },
+
+  async getCurrentUser(): Promise<User | null> {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
+    const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+    if (!supabaseUser) return null;
+
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('is_premium, stories_generated')
+      .eq('id', supabaseUser.id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user data:', error);
+    }
+
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email!,
+      name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0],
+      is_premium: userData?.is_premium || false,
+      stories_generated: userData?.stories_generated || 0,
+    };
+  },
+
   async signOut() {
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userName');
+    if (!isSupabaseConfigured) {
+      return { success: true }; // Always succeed signout if not configured
+    }
+
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return { success: true };
   },
 
   onAuthStateChange(callback: (user: User | null) => void) {
-    // Simple implementation - check localStorage
-    const user = this.getCurrentUser();
-    callback(user);
-    
-    // Return cleanup function
-    return () => {};
-  }
+    if (!isSupabaseConfigured) {
+      // Return a no-op unsubscribe function if not configured
+      callback(null);
+      return { data: { subscription: { unsubscribe: () => {} } } };
+    }
+
+    return supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const user = await this.getCurrentUser();
+        callback(user);
+      } else if (event === 'SIGNED_OUT') {
+        callback(null);
+      }
+    });
+  },
 };
