@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Send, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { safeNavigate } from '@/lib/navigation';
 import { ConfigError } from '@/components/config-error';
 
 export default function Auth() {
@@ -29,7 +30,7 @@ export default function Auth() {
     const checkSession = async () => {
       const user = await authService.getCurrentUser();
       if (user) {
-        setLocation('/dashboard');
+        safeNavigate(setLocation, '/dashboard');
       }
     };
     checkSession();
@@ -42,19 +43,18 @@ export default function Auth() {
     setIsLoading(true);
     try {
       // Auto-login for demo account
-      if (email.toLowerCase() === 'demo@gmail.com') {
+      if (email.toLowerCase() === 'demo@gmail.com' || email.toLowerCase() === 'demo@storymagic.ai') {
         console.log('Attempting demo login...');
         const response = await fetch('/api/demo-login', { method: 'POST' });
+        if (!response.ok) throw new Error('Demo login failed');
         const user = await response.json();
         console.log('Demo login successful:', user);
-        localStorage.setItem('userId', user.id);
-        localStorage.setItem('userEmail', user.email);
-        localStorage.setItem('userName', user.name || '');
+        await authService.setDemoSession(user);
         toast({
           title: "Welcome to StoryMagic!",
           description: "Logged in as Demo User",
         });
-        setLocation('/dashboard');
+        safeNavigate(setLocation, '/dashboard');
         return;
       }
 
@@ -238,12 +238,17 @@ export default function Auth() {
               const user = await response.json();
               console.log('Demo user data:', user);
               
-              localStorage.setItem('userId', user.id);
-              localStorage.setItem('userEmail', user.email);
-              localStorage.setItem('userName', user.name || '');
+              // Set up session and wait for it to complete
+              await authService.setDemoSession(user);
               
-              console.log('LocalStorage set, redirecting to dashboard...');
-              setLocation('/dashboard');
+              // Verify the session was created
+              const currentUser = await authService.getCurrentUser();
+              if (!currentUser) {
+                throw new Error('Failed to establish session');
+              }
+              
+              console.log('Session established, redirecting to dashboard...');
+              window.location.href = '/dashboard'; // Use full page navigation instead of wouter
             } catch (error) {
               console.error('Demo login error:', error);
               toast({

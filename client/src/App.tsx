@@ -9,6 +9,7 @@ import Auth from "@/pages/auth";
 import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
+import AuthCallback from "@/pages/auth-callback";
 
 function Router() {
   return (
@@ -21,6 +22,11 @@ function Router() {
       <Route path="/auth">
         <AuthGuard requireAuth={false}>
           <Auth />
+        </AuthGuard>
+      </Route>
+      <Route path="/auth/callback">
+        <AuthGuard requireAuth={false}>
+          <AuthCallback />
         </AuthGuard>
       </Route>
       <Route path="/dashboard">

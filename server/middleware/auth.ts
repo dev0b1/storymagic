@@ -15,7 +15,34 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const token = authHeader.split(' ')[1];
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
-    if (error || !user) {
+    if (error) {
+      if (error.message.includes('expired')) {
+        // Token expired, try to refresh
+        const refreshToken = req.headers['x-refresh-token'];
+        if (refreshToken) {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: refreshToken as string
+          });
+          
+          if (refreshError || !refreshData.user) {
+            return res.status(401).json({ 
+              message: 'Session expired. Please log in again.',
+              code: 'TOKEN_EXPIRED'
+            });
+          }
+          
+          // Successfully refreshed
+          req.user = refreshData.user;
+          // Send new tokens in response headers
+          res.setHeader('x-new-access-token', refreshData.session?.access_token || '');
+          res.setHeader('x-new-refresh-token', refreshData.session?.refresh_token || '');
+          return next();
+        }
+      }
+      return res.status(401).json({ message: 'Invalid authentication token' });
+    }
+
+    if (!user) {
       return res.status(401).json({ message: 'Invalid authentication token' });
     }
 

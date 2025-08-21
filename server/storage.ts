@@ -33,12 +33,17 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = { 
-      ...insertUser,
-      name: insertUser.name || null,
-      isPremium: insertUser.isPremium || "false",
-      storiesGenerated: insertUser.storiesGenerated || "0",
-      id,
-      createdAt: new Date()
+  id,
+  email: insertUser.email,
+  name: insertUser.name ?? null,
+  is_premium: insertUser.is_premium ?? false,
+  stories_generated: insertUser.stories_generated ?? 0,
+  subscription_status: insertUser.subscription_status ?? 'free',
+  subscription_id: insertUser.subscription_id ?? null,
+  subscription_end_date: insertUser.subscription_end_date ?? null,
+  stripe_customer_id: insertUser.stripe_customer_id ?? null,
+  created_at: new Date(),
+  updated_at: new Date()
     };
     this.users.set(id, user);
     return user;
@@ -47,12 +52,17 @@ export class MemStorage implements IStorage {
   // Create user with specific ID for demo purposes
   async createUserWithId(userId: string, insertUser: InsertUser): Promise<User> {
     const user: User = { 
-      ...insertUser,
-      name: insertUser.name || null,
-      isPremium: insertUser.isPremium || "false",
-      storiesGenerated: insertUser.storiesGenerated || "0",
-      id: userId,
-      createdAt: new Date()
+  id: userId,
+  email: insertUser.email,
+  name: insertUser.name ?? null,
+  is_premium: insertUser.is_premium ?? false,
+  stories_generated: insertUser.stories_generated ?? 0,
+  subscription_status: insertUser.subscription_status ?? 'free',
+  subscription_id: insertUser.subscription_id ?? null,
+  subscription_end_date: insertUser.subscription_end_date ?? null,
+  stripe_customer_id: insertUser.stripe_customer_id ?? null,
+  created_at: new Date(),
+  updated_at: new Date()
     };
     this.users.set(userId, user);
     return user;
@@ -60,8 +70,8 @@ export class MemStorage implements IStorage {
 
   async getUserStories(userId: string, limit = 10): Promise<Story[]> {
     const userStories = Array.from(this.stories.values())
-      .filter(story => story.userId === userId)
-      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
+  .filter(story => story.user_id === userId)
+  .sort((a, b) => (b.created_at?.getTime() || 0) - (a.created_at?.getTime() || 0))
       .slice(0, limit);
     return userStories;
   }
@@ -79,10 +89,17 @@ export class MemStorage implements IStorage {
   async createStory(insertStory: InsertStory): Promise<Story> {
     const id = randomUUID();
     const story: Story = {
-      ...insertStory,
-      audioUrl: insertStory.audioUrl || null,
-      id,
-      createdAt: new Date()
+  id,
+  user_id: insertStory.user_id,
+  input_text: insertStory.input_text,
+  output_story: insertStory.output_story,
+  narration_mode: insertStory.narration_mode ?? 'balanced',
+  content_type: insertStory.content_type ?? 'general',
+  source: insertStory.source ?? 'text',
+  story_id: insertStory.story_id ?? null,
+  used_fallback: insertStory.used_fallback ?? false,
+  created_at: new Date(),
+  updated_at: new Date()
     };
     this.stories.set(id, story);
     return story;

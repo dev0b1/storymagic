@@ -11,19 +11,21 @@ import { StoryReader } from '@/components/story-reader';
 import { ProFeatures } from '@/components/pro-features';
 import { LogOut, Plus, Sparkles, FileText, Settings, Crown, Volume2, Download, Star } from 'lucide-react';
 import { authService, type User } from '@/lib/auth';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { storyService } from '@/lib/openrouter';
 import type { Story } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 
 import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { safeNavigate } from '@/lib/navigation';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [inputText, setInputText] = useState('');
   const [generatedStory, setGeneratedStory] = useState('');
   const [currentStoryId, setCurrentStoryId] = useState<string | null>(null);
-  const [selectedNarrationMode, setSelectedNarrationMode] = useState<'focus' | 'balanced' | 'engaging'>('balanced');
+  const [selectedNarrationMode, setSelectedNarrationMode] = useState<'focus' | 'balanced' | 'engaging' | 'doc_theatre'>('balanced');
   const [isStoryPlaying, setIsStoryPlaying] = useState(false);
   const [storyContentType, setStoryContentType] = useState<string>('general');
   const [storySource, setStorySource] = useState<string>('text');
@@ -34,18 +36,27 @@ export default function Dashboard() {
 
   // Check auth state
   useEffect(() => {
-    console.log('Checking auth state...');
-    const currentUser = authService.getCurrentUser();
-    console.log('Current user from auth service:', currentUser);
-    
-    if (!currentUser) {
-      console.log('No user found, redirecting to auth...');
-      setLocation('/auth');
-      return;
-    }
-    
-    console.log('User found, setting user state:', currentUser);
-    setUser(currentUser);
+    const checkAuth = async () => {
+      console.log('Checking auth state...');
+      try {
+        const currentUser = await authService.getCurrentUser();
+        console.log('Current user from auth service:', currentUser);
+        
+        if (!currentUser) {
+          console.log('No user found, redirecting to auth...');
+          safeNavigate(setLocation, '/auth');
+          return;
+        }
+        
+        console.log('User found, setting user state:', currentUser);
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        safeNavigate(setLocation, '/auth');
+      }
+    };
+
+    checkAuth();
   }, [setLocation]);
 
   // Fetch user details
@@ -61,8 +72,12 @@ export default function Dashboard() {
       if (!response.ok) throw new Error('Failed to fetch user details');
       const userData = await response.json();
       
-      // Update local storage with fresh user data
-      authService.updateLocalUser(userData);
+      // Update local storage with fresh user data (best-effort)
+      try {
+        await authService.updateLocalUser(userData);
+      } catch (e) {
+        console.warn('Failed to update local user with fresh data:', e);
+      }
       
       return userData;
     }
@@ -75,9 +90,17 @@ export default function Dashboard() {
     retry: false,
     staleTime: 0, // Always refetch to get latest stories
     queryFn: async () => {
-      const response = await fetch('/api/stories', {
-        headers: { 'x-user-id': user!.id }
-      });
+      const headers: Record<string, string> = { 'x-user-id': user!.id };
+      if (localStorage.getItem('demo_user') === 'true') {
+        headers['x-demo-user'] = 'true';
+      } else if (isSupabaseConfigured) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+          if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
+        }
+      }
+      const response = await fetch('/api/stories', { headers });
       if (!response.ok) throw new Error('Failed to fetch stories');
       const storiesData = await response.json();
       
@@ -106,12 +129,22 @@ export default function Dashboard() {
       
       const endpoint = isPDFContent ? '/api/pdf-to-story' : '/api/story';
       
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-user-id': data.userId
+      };
+      if (localStorage.getItem('demo_user') === 'true') {
+        headers['x-demo-user'] = 'true';
+      } else if (isSupabaseConfigured) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+          if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
+        }
+      }
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': data.userId
-        },
+        headers,
         body: JSON.stringify({
           inputText: data.text,
           narrationMode: data.narrationMode,
@@ -170,7 +203,7 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     try {
       await authService.signOut();
-      setLocation('/auth');
+  safeNavigate(setLocation, '/auth');
     } catch (error) {
       console.error('Sign out error:', error);
     }
@@ -228,8 +261,18 @@ export default function Dashboard() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="ml-2 h-6 px-2 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
-                  onClick={() => setShowProFeatures(true)}
+                  className="ml-2 h-6 px-2 text-xs"
+                  onClick={async () => {
+                    try {
+                      const headers: Record<string, string> = {};
+                      if (localStorage.getItem('demo_user') === 'true') headers['x-user-id'] = 'demo@gmail.com';
+                      const res = await fetch('/api/upgrade', { method: 'POST', headers });
+                      if (!res.ok) throw new Error('Upgrade failed');
+                      await queryClient.invalidateQueries({ queryKey: ['/api/me'] });
+                    } catch (e) {
+                      console.error('Upgrade error:', e);
+                    }
+                  }}
                 >
                   <Star className="w-3 h-3 mr-1" />
                   Upgrade
@@ -265,7 +308,7 @@ export default function Dashboard() {
 
 
             {/* Input Section */}
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
+            <Card className="bg-white">
               <CardHeader>
                 <CardTitle className="flex items-center text-purple-800">
                   <Sparkles className="w-5 h-5 mr-2" />
@@ -336,11 +379,19 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
                         formData.append('narrationMode', selectedNarrationMode);
 
                         try {
+                          const headers: Record<string, string> = { 'x-user-id': user?.id || 'demo' };
+                          if (localStorage.getItem('demo_user') === 'true') {
+                            headers['x-demo-user'] = 'true';
+                          } else if (isSupabaseConfigured) {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (session?.access_token) {
+                              headers['Authorization'] = `Bearer ${session.access_token}`;
+                              if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
+                            }
+                          }
                           const response = await fetch('/api/upload-pdf', {
                             method: 'POST',
-                            headers: {
-                              'x-user-id': user?.id || 'demo'
-                            },
+                            headers,
                             body: formData
                           });
 
@@ -383,7 +434,7 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
                 {/* Narration Mode Selection */}
                 <div>
                   <h4 className="font-semibold text-gray-800 mb-3">Choose Narration Mode:</h4>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
                     {NARRATION_MODES.map((mode) => (
                       <NarrationModeCard
                         key={mode.id}
@@ -485,7 +536,7 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
             {/* Right Side - Story Display */}
             <div className="w-1/2 p-6 overflow-y-auto">
               {generatedStory ? (
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
+                <Card className="bg-white">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center text-purple-800">
@@ -551,7 +602,7 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="bg-white/60 backdrop-blur-sm shadow-xl h-full flex items-center justify-center">
+                <Card className="bg-white h-full flex items-center justify-center">
                   <CardContent className="text-center">
                     <div className="text-6xl mb-4">✨</div>
                     <h3 className="font-magical text-2xl text-purple-800 mb-2">Ready for Magic?</h3>
@@ -580,13 +631,17 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
                 </Button>
               </div>
               <ProFeatures 
-                onUpgrade={() => {
-                  // TODO: Implement Stripe checkout
-                  toast({
-                    title: "Premium upgrade coming soon!",
-                    description: "We're working on the payment integration. Stay tuned!",
-                  });
-                  setShowProFeatures(false);
+                onUpgrade={async () => {
+                  try {
+                    const headers: Record<string, string> = {};
+                    if (localStorage.getItem('demo_user') === 'true') headers['x-user-id'] = 'demo@gmail.com';
+                    const res = await fetch('/api/upgrade', { method: 'POST', headers });
+                    if (!res.ok) throw new Error('Upgrade failed');
+                    await queryClient.invalidateQueries({ queryKey: ['/api/me'] });
+                    setShowProFeatures(false);
+                  } catch (e) {
+                    console.error('Upgrade error:', e);
+                  }
                 }}
                 currentPlan={userDetails?.is_premium ? 'premium' : 'free'}
               />

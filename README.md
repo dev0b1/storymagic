@@ -10,11 +10,11 @@ Transform boring PDFs and text into immersive, narrated stories with professiona
 - **Adaptive Storytelling** - Professional narration modes based on content type
 - **Educational Output** - Meaningful, context-aware stories that preserve factual accuracy
 
-### 🎭 Professional Narration Modes
-- **📚 Focus Mode** - Facts-only, professional delivery for reports and technical docs
-- **⚖️ Balanced Mode** - Natural + informative (default) for most content
-- **🎭 Engaging Mode** - Storytelling when appropriate for history and biographies
-- **Smart Content Detection** - AI automatically adapts storytelling approach
+### 🎭 Narration Modes
+- **📚 Focus**: Crystal-clear, precise delivery. For technical and academic content.
+- **⚖️ Guide (Balanced)**: Friendly, informative, conversational.
+- **💫 Storyteller (Engaging)**: Narrative storytelling while maintaining accuracy.
+- **🎭 Doc Theatre**: Multi-voice drama/debate/story based on the document. Includes subtle [SFX:] and [BG:] cues, interruptions (—) and overlapping (overlapping) markers.
 
 ### 🎵 Immersive Audio Experience
 - **Dynamic Background Music** - Ambient sounds that adapt to narration mode
@@ -215,10 +215,9 @@ npm install
 5. Generate an immersive story
 
 ### Audio Controls
-- **Toggle Ambient Audio** - Turn background music on/off
-- **Mode-Specific Sounds** - Each narration mode has unique audio profiles
-- **Audio Download** - Save stories as MP3 files
-- **Multiple TTS Options** - Premium voices for pro users
+- Background music and SFX cues are mixed server-side when enabled
+- Audio download as MP3
+- Multiple TTS options; premium voices for pro users
 
 ## 🎯 Use Cases
 
@@ -269,6 +268,41 @@ Modify story generation settings in `server/routes.ts`:
 - Change AI models
 - Adjust temperature and token limits
 - Customize narration mode prompts
+
+## Endpoints Overview
+
+- `POST /api/story`
+  - Generates a story from text.
+  - Body: `{ text: string, narrationMode: 'focus' | 'balanced' | 'engaging' | 'doc_theatre' }`
+  - Auth: optional. Demo header `x-demo-user: true` is supported. For real users, send `Authorization: Bearer <supabase_jwt>`.
+  - Storage: Saves story to `stories` table for authenticated users; demo users save under their id, anonymous may be used for legacy entries.
+
+- `POST /api/pdf-to-story`
+  - Generates a story from PDF text.
+  - Body: `{ pdfText: string, narrationMode: ... }`
+  - Similar auth and storage behavior as `/api/story`.
+
+- `GET /api/stories`
+  - Returns latest stories for the authenticated user. Demo users merge `demo@gmail.com` and `anonymous` stories.
+
+- `GET /api/me`
+  - Returns or creates the current user using header `x-user-id` (MVP) or Supabase auth context.
+
+- `POST /api/story/:id/audio`
+  - Creates audio from a specific story. Supports optional background music and mixing.
+
+- `POST /api/upgrade`
+  - Marks the current user as premium (MVP).
+  - Auth: send `Authorization` headers if logged-in, or `x-user-id` for demo (`demo@gmail.com`).
+
+## Narration Modes In-Depth
+
+- Focus: System prompt enforces precise, structured explanations; preserves all factual content.
+- Balanced (Guide): System prompt enforces a friendly, conversational style with accuracy.
+- Engaging (Storyteller): System prompt creates engaging narrative while preserving facts.
+- Doc Theatre: System prompt directs multi-voice scripts, overlapping, interjections, and embeds [SFX:] and [BG:] cues.
+
+To manually switch mode in API calls, provide `narrationMode` as one of: `focus`, `balanced`, `engaging`, `doc_theatre`.
 
 ## 📁 Project Structure
 

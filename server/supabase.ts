@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import path from 'path';
+import os from 'os';
+import fs from 'fs/promises';
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'your-service-role-key';
@@ -14,7 +17,9 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const fallbackStorage = {
   users: new Map<string, any>(),
   stories: new Map<string, any>(),
-  nextStoryId: 1
+  subscriptions: new Map<string, any>(),
+  nextStoryId: 1,
+  nextSubId: 1,
 };
 
 // Database types
@@ -26,6 +31,15 @@ export interface User {
   stories_generated: number;
   created_at: string;
   updated_at: string;
+  // subscription extras
+  subscription_status?: 'free' | 'active' | 'inactive' | 'cancelled';
+  subscription_id?: string | null;
+  subscription_end_date?: string | null;
+  // payment provider ids
+  paystack_customer_id?: string | null;
+  paystack_customer_code?: string | null;
+  // legacy stripe (optional, for backward compatibility)
+  stripe_customer_id?: string | null;
 }
 
 export interface Story {
@@ -85,89 +99,30 @@ export const db = {
     }
 
     try {
-      const setupSql = `
-        -- Create users table if it doesn't exist
-        CREATE TABLE IF NOT EXISTS users (
-          id TEXT PRIMARY KEY,
-          email TEXT UNIQUE NOT NULL,
-          name TEXT,
-          is_premium BOOLEAN DEFAULT FALSE,
-          stories_generated INTEGER DEFAULT 0,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
+      const migrationsDir = path.join(process.cwd(), 'server', 'migrations');
+      const files = await fs.readdir(migrationsDir).catch(() => []);
 
-        -- Create stories table if it doesn't exist
-        CREATE TABLE IF NOT EXISTS stories (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-          input_text TEXT NOT NULL,
-          output_story TEXT NOT NULL,
-          narration_mode TEXT NOT NULL DEFAULT 'balanced',
-          content_type TEXT DEFAULT 'general',
-          source TEXT DEFAULT 'text',
-          story_id TEXT,
-          used_fallback BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-
-        -- Create indexes
-        CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
-        CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
-        -- Enable RLS
-        ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-        ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
-
-        -- RLS policies for users
-        DO $$ 
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Users can view their own data'
-          ) THEN
-            CREATE POLICY "Users can view their own data" ON users FOR SELECT USING (auth.uid()::text = id);
-          END IF;
-
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Users can update their own data'
-          ) THEN
-            CREATE POLICY "Users can update their own data" ON users FOR UPDATE USING (auth.uid()::text = id);
-          END IF;
-
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Users can insert their own data'
-          ) THEN
-            CREATE POLICY "Users can insert their own data" ON users FOR INSERT WITH CHECK (auth.uid()::text = id);
-          END IF;
-        END $$;
-
-        -- RLS policies for stories
-        DO $$ 
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_policies WHERE tablename = 'stories' AND policyname = 'Users can view their own stories'
-          ) THEN
-            CREATE POLICY "Users can view their own stories" ON stories FOR SELECT USING (auth.uid()::text = user_id);
-          END IF;
-
-          IF NOT EXISTS (
-            SELECT 1 FROM pg_policies WHERE tablename = 'stories' AND policyname = 'Users can insert their own stories'
-          ) THEN
-            CREATE POLICY "Users can insert their own stories" ON stories FOR INSERT WITH CHECK (auth.uid()::text = user_id);
-          END IF;
-        END $$;
-      `;
-
-      const { error } = await supabase.rpc('exec_sql', { sql: setupSql });
-      
-      if (error) {
-        console.error('❌ Database setup error:', error);
-        return false;
+      if (files.length === 0) {
+        console.log('No migration files found in', migrationsDir);
+        return true;
       }
 
-      console.log('✅ Database setup completed successfully');
+      // Sort files to ensure order (e.g., 0001_*.sql first)
+      files.sort();
+
+      for (const file of files) {
+        if (!file.endsWith('.sql')) continue;
+        const filePath = path.join(migrationsDir, file);
+        const sql = await fs.readFile(filePath, 'utf8');
+        console.log('Running migration:', file);
+        const { error } = await supabase.rpc('exec_sql', { sql });
+        if (error) {
+          console.error('❌ Migration error for', file, error);
+          return false;
+        }
+      }
+
+      console.log('✅ Migrations applied successfully');
       return true;
     } catch (error) {
       console.error('❌ Database setup error:', error);
@@ -194,7 +149,7 @@ export const db = {
         return fallbackStorage.users.get(userId) || null;
       }
       
-      return data;
+      return data as unknown as User;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       return fallbackStorage.users.get(userId) || null;
@@ -224,7 +179,7 @@ export const db = {
         return null;
       }
       
-      return data;
+      return data as unknown as User;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       for (const user of fallbackStorage.users.values()) {
@@ -235,11 +190,17 @@ export const db = {
   },
 
   async createUser(userData: {
-    id: string;
-    email: string;
-    name?: string;
-    is_premium?: boolean;
-    stories_generated?: number;
+  id: string;
+  email: string;
+  name?: string;
+  is_premium?: boolean;
+  stories_generated?: number;
+  subscription_status?: string | null;
+  subscription_id?: string | null;
+  subscription_end_date?: string | null;
+  paystack_customer_id?: string | null;
+  paystack_customer_code?: string | null;
+  stripe_customer_id?: string | null;
   }): Promise<User | null> {
     if (!canUseSupabase) {
       const user = {
@@ -248,9 +209,15 @@ export const db = {
         name: userData.name,
         is_premium: userData.is_premium || false,
         stories_generated: userData.stories_generated || 0,
+        subscription_status: userData.subscription_status || 'free',
+        subscription_id: userData.subscription_id || null,
+        subscription_end_date: userData.subscription_end_date || null,
+        paystack_customer_id: userData.paystack_customer_id || null,
+        paystack_customer_code: userData.paystack_customer_code || null,
+        stripe_customer_id: userData.stripe_customer_id || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      };
+      } as User;
       fallbackStorage.users.set(userData.id, user);
       return user;
     }
@@ -262,7 +229,13 @@ export const db = {
           email: userData.email,
           name: userData.name,
           is_premium: userData.is_premium || false,
-          stories_generated: userData.stories_generated || 0
+          stories_generated: userData.stories_generated || 0,
+          subscription_status: userData.subscription_status || 'free',
+          subscription_id: userData.subscription_id || null,
+          subscription_end_date: userData.subscription_end_date || null,
+          paystack_customer_id: userData.paystack_customer_id || null,
+          paystack_customer_code: userData.paystack_customer_code || null,
+          stripe_customer_id: userData.stripe_customer_id || null,
         }])
         .select()
         .single();
@@ -278,12 +251,12 @@ export const db = {
           stories_generated: userData.stories_generated || 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        };
+        } as User;
         fallbackStorage.users.set(userData.id, user);
         return user;
       }
       
-      return data;
+      return data as unknown as User;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       const user = {
@@ -294,7 +267,7 @@ export const db = {
         stories_generated: userData.stories_generated || 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      };
+      } as User;
       fallbackStorage.users.set(userData.id, user);
       return user;
     }
@@ -306,7 +279,7 @@ export const db = {
       if (user) {
         const updatedUser = { ...user, ...updates, updated_at: new Date().toISOString() };
         fallbackStorage.users.set(userId, updatedUser);
-        return updatedUser;
+        return updatedUser as User;
       }
       return null;
     }
@@ -325,19 +298,19 @@ export const db = {
         if (user) {
           const updatedUser = { ...user, ...updates, updated_at: new Date().toISOString() };
           fallbackStorage.users.set(userId, updatedUser);
-          return updatedUser;
+          return updatedUser as User;
         }
         return null;
       }
       
-      return data;
+      return data as unknown as User;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       const user = fallbackStorage.users.get(userId);
       if (user) {
         const updatedUser = { ...user, ...updates, updated_at: new Date().toISOString() };
         fallbackStorage.users.set(userId, updatedUser);
-        return updatedUser;
+        return updatedUser as User;
       }
       return null;
     }
@@ -404,10 +377,10 @@ export const db = {
           updated_at: new Date().toISOString()
         };
         fallbackStorage.stories.set(story.id, story);
-        return story;
+        return story as Story;
       }
       
-      return data;
+      return data as unknown as Story;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       const story = {
@@ -424,7 +397,7 @@ export const db = {
         updated_at: new Date().toISOString()
       };
       fallbackStorage.stories.set(story.id, story);
-      return story;
+      return story as Story;
     }
   },
 
@@ -434,7 +407,7 @@ export const db = {
         .filter(story => story.user_id === userId)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit);
-      return stories;
+      return stories as Story[];
     }
     try {
       const { data, error } = await supabase
@@ -451,17 +424,17 @@ export const db = {
           .filter(story => story.user_id === userId)
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, limit);
-        return stories;
+        return stories as Story[];
       }
       
-      return data || [];
+      return (data || []) as unknown as Story[];
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       const stories = Array.from(fallbackStorage.stories.values())
         .filter(story => story.user_id === userId)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit);
-      return stories;
+      return stories as Story[];
     }
   },
 
@@ -482,7 +455,7 @@ export const db = {
         return fallbackStorage.stories.get(storyId) || null;
       }
       
-      return data;
+      return data as unknown as Story;
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       return fallbackStorage.stories.get(storyId) || null;
@@ -525,6 +498,50 @@ export const db = {
         return true;
       }
       return false;
+    }
+  },
+
+  async createSubscription(subData: {
+    user_id: string;
+    paystack_subscription_id: string;
+    paystack_authorization_code?: string;
+    status: string;
+    plan_type: string;
+    current_period_start: Date;
+    current_period_end: Date;
+    amount: number; // in kobo
+    currency: string;
+  }): Promise<any> {
+    if (!canUseSupabase) {
+      const id = `sub_${fallbackStorage.nextSubId++}`;
+      const record = { id, ...subData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      fallbackStorage.subscriptions.set(id, record);
+      return record;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert([{
+          user_id: subData.user_id,
+          paystack_subscription_id: subData.paystack_subscription_id,
+          paystack_authorization_code: subData.paystack_authorization_code,
+          status: subData.status,
+          plan_type: subData.plan_type,
+          current_period_start: subData.current_period_start.toISOString(),
+          current_period_end: subData.current_period_end.toISOString(),
+          amount: subData.amount,
+          currency: subData.currency,
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Supabase connection failed while creating subscription', error);
+      const id = `sub_${fallbackStorage.nextSubId++}`;
+      const record = { id, ...subData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      fallbackStorage.subscriptions.set(id, record);
+      return record;
     }
   }
 };

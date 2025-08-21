@@ -29,9 +29,13 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
+    const url = queryKey.join("/") as string;
+    const headers: Record<string, string> = {};
+    // Forward demo header for server optionalAuth + handleDemoUser
+    if (typeof window !== 'undefined' && localStorage.getItem('demo_user') === 'true') {
+      headers['x-demo-user'] = 'true';
+    }
+    const res = await fetch(url, { credentials: "include", headers });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

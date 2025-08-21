@@ -1,6 +1,6 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
-import { db } from "./supabase";
+import { db, supabase } from "./supabase";
 import { insertStorySchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
@@ -12,6 +12,8 @@ import multer from 'multer';
 import { config, hasValidApiKeys } from './config.js';
 import { requireAuth, optionalAuth, handleDemoUser } from './middleware/auth';
 import { User } from '@supabase/supabase-js';
+import type { User as DbUser } from '@shared/schema';
+import { paystackService } from './services/paystack.js';
 
 // Safely import pdf-parse to avoid test file errors
 let pdf: any = null;
@@ -76,7 +78,7 @@ const narrationModes = {
 // Content type detection removed as it's not needed
 
 // Magical content transformation with personalized narration styles
-function generateAdaptivePrompt(narrationMode: 'focus' | 'balanced' | 'engaging'): string {
+function generateAdaptivePrompt(narrationMode: 'focus' | 'balanced' | 'engaging' | 'doc_theatre'): string {
   const mode = narrationModes[narrationMode as keyof typeof narrationModes];
   
   const modeInstructions = {
@@ -115,6 +117,17 @@ Transform this content using the art of storytelling:
 - Keep factual precision while making the content unforgettable
 
 Your goal is to make the reader feel like they're experiencing an engaging story that naturally leads to understanding and insight.`
+    ,
+    doc_theatre: `You are a creative director producing a natural, multi-voice audio drama based on the document.
+
+Create a dynamic doc-theatre script:
+- Identify roles (e.g., Narrator, Expert A, Expert B, Host) from the context
+- Alternate and occasionally overlap voices for realism; include brief interjections
+- Use subtle sound effect cues [SFX: ] and background ambience cues [BG: ] tied to content
+- Keep it natural, concise, and faithful to the source (no added facts)
+- Mark interruptions with em-dashes and overlapping with (overlapping)
+
+Your goal is a vivid, engaging, debate/story/drama depending on content, that remains accurate to the document.`
   };
   
   return `${modeInstructions[narrationMode as keyof typeof modeInstructions]}
@@ -535,15 +548,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('📚 Fetching stories for user:', userId);
 
     try {
-      // For demo users, also check for stories saved as 'anonymous'
-      let effectiveUserId = userId;
+      // For demo users, include both demo and anonymous stories
       if (userId === 'demo@gmail.com') {
-        console.log('🎭 Demo user detected, including anonymous stories');
-        effectiveUserId = 'anonymous';
+        console.log('🎭 Demo user detected, merging demo and anonymous stories');
+        const demoStories = await db.getUserStories('demo@gmail.com', 50);
+        const anonStories = await db.getUserStories('anonymous', 50);
+        const combined = [...demoStories, ...anonStories]
+          .sort((a, b) => new Date(b.created_at as any).getTime() - new Date(a.created_at as any).getTime())
+          .slice(0, 10);
+        console.log(`📖 Found ${combined.length} merged stories for demo user`);
+        return res.json(combined);
       }
 
-      const stories = await db.getUserStories(effectiveUserId, 3);
-      console.log(`📖 Found ${stories.length} stories for user:`, effectiveUserId);
+      const stories = await db.getUserStories(userId, 10);
+      console.log(`📖 Found ${stories.length} stories for user:`, userId);
       res.json(stories);
     } catch (error) {
       console.error('❌ Get stories error:', error);
@@ -780,43 +798,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Demo login endpoint
   app.post("/api/demo-login", async (req, res) => {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const start = Date.now();
+    console.info({ requestId, route: '/api/demo-login', msg: 'demo login requested' });
     try {
-      const demoEmail = "demo@gmail.com";
+      const demoEmail = 'demo@storymagic.ai';
       
-      // Check if demo user exists
+      // First, check if demo user exists in our database
       let user = await db.getUserByEmail(demoEmail);
+      console.debug({ requestId, step: 'lookup', demoEmail, found: !!user });
       
       if (!user) {
-        // Create demo user
+        console.info({ requestId, step: 'create', msg: 'Creating new demo user' });
+        // Create demo user in our database
         user = await db.createUser({ 
-          id: demoEmail,
-          email: demoEmail, 
+          id: 'demo-' + Date.now(), // Generate a unique ID
+          email: demoEmail,
           name: "Demo User",
           is_premium: false,
-          stories_generated: 0
+          stories_generated: 0,
+          subscription_status: 'free',
+          subscription_id: null,
+          subscription_end_date: null,
+          stripe_customer_id: null
         });
+        
+        if (!user) {
+          throw new Error('Failed to create demo user in database');
+        }
+        console.info({ requestId, step: 'create', msg: 'Demo user created', userId: user.id });
       }
 
-      res.json(user);
+      // Generate session tokens (note: currently these are app-level demo tokens, not Supabase JWTs)
+      const access_token = 'demo-' + Math.random().toString(36).substring(7);
+      const refresh_token = 'demo-refresh-' + Math.random().toString(36).substring(7);
+
+      const duration = Date.now() - start;
+      console.info({ requestId, route: '/api/demo-login', msg: 'demo login completed', userId: user.id, duration });
+
+      // Return user data with demo tokens
+      res.json({
+        ...user,
+        access_token,
+        refresh_token
+      });
     } catch (error) {
-      console.error('Demo login error:', error);
+      const duration = Date.now() - start;
+      console.error({ requestId, route: '/api/demo-login', msg: 'demo login failed', error, duration });
       res.status(500).json({ message: 'Failed to create demo user' });
     }
   });
 
   // Create or get user (for auth)
   app.post("/api/user", async (req, res) => {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const start = Date.now();
+    console.info({ requestId, route: '/api/user', msg: 'user create/get requested', body: { ...(req.body && { email: req.body.email }) } });
     try {
       const { email, name } = req.body;
       
       if (!email) {
+        console.warn({ requestId, route: '/api/user', msg: 'missing email in request' });
         return res.status(400).json({ message: 'Email is required' });
       }
 
       // Check if user exists
       let user = await db.getUserByEmail(email);
+      console.debug({ requestId, route: '/api/user', step: 'lookup', email, found: !!user });
       
       if (!user) {
+        console.info({ requestId, route: '/api/user', step: 'create', msg: 'Creating new user', email });
         // Create new user
         user = await db.createUser({ 
           id: email,
@@ -825,12 +876,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
           is_premium: false,
           stories_generated: 0
         });
+  console.info({ requestId, route: '/api/user', step: 'create', msg: 'User created', userId: user?.id });
       }
 
+      const duration = Date.now() - start;
+  console.info({ requestId, route: '/api/user', msg: 'user create/get completed', userId: user?.id, duration });
       res.json(user);
     } catch (error) {
-      console.error('User creation error:', error);
+      const duration = Date.now() - start;
+      console.error({ requestId, route: '/api/user', msg: 'user create/get failed', error, duration });
       res.status(500).json({ message: 'Failed to create/get user' });
+    }
+  });
+
+  // Simple upgrade endpoint for MVP: marks user as premium
+  app.post('/api/upgrade', optionalAuth, handleDemoUser, async (req, res) => {
+    try {
+      const headerUserId = req.headers['x-user-id'] as string | undefined;
+      const authUserId = req.user?.id as string | undefined;
+      const userId = authUserId || headerUserId || 'demo@gmail.com';
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      const user = await db.getUser(userId);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      await db.updateUser(userId, { is_premium: true, subscription_status: 'active' });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('Upgrade failed', e);
+      res.status(500).json({ message: 'Upgrade failed' });
+    }
+  });
+
+  // Paystack payment endpoints
+  app.post('/api/payment/initialize', optionalAuth, handleDemoUser, async (req, res) => {
+    try {
+      const { email, amount, reference } = req.body;
+      const userId = req.user?.id || req.headers['x-user-id'] as string;
+      
+      if (!email || !amount || !reference) {
+        return res.status(400).json({ message: 'Missing required fields' });
+      }
+
+      // Create or get Paystack customer
+      let customer;
+      try {
+        customer = await paystackService.createCustomer(email, req.user?.user_metadata?.name);
+      } catch (error) {
+        // Customer might already exist, try to get them
+        console.log('Customer creation failed, might already exist:', error);
+      }
+
+      // Initialize transaction
+      const transaction = await paystackService.initializeTransaction({
+        email,
+        amount: amount, // Amount in Naira
+        reference,
+        callback_url: `${req.protocol}://${req.get('host')}/api/payment/verify`,
+        metadata: {
+          user_id: userId,
+          plan_type: 'premium_monthly'
+        }
+      });
+
+      res.json({
+        authorization_url: transaction.authorization_url,
+        reference: transaction.reference,
+        access_code: transaction.access_code
+      });
+    } catch (error) {
+      console.error('Payment initialization failed:', error);
+      res.status(500).json({ message: 'Payment initialization failed' });
+    }
+  });
+
+  app.get('/api/payment/verify', async (req, res) => {
+    try {
+      const { reference } = req.query;
+      if (!reference) {
+        return res.status(400).json({ message: 'Missing reference' });
+      }
+
+      // Verify transaction with Paystack
+      const transaction = await paystackService.verifyTransaction(reference as string);
+      
+      if (transaction.status === 'success') {
+        const userId = transaction.metadata?.user_id;
+        const amount = transaction.amount / 100; // Convert from kobo to Naira
+        
+        if (userId) {
+          // Update user to premium
+          await db.updateUser(userId, { 
+            is_premium: true, 
+            subscription_status: 'active',
+            paystack_customer_id: transaction.customer.id.toString(),
+            paystack_customer_code: transaction.customer.customer_code
+          });
+
+          // Create subscription record
+          const subscriptionData = {
+            user_id: userId,
+            paystack_subscription_id: transaction.id.toString(),
+            paystack_authorization_code: transaction.authorization.authorization_code,
+            status: 'active',
+            plan_type: 'premium_monthly',
+            current_period_start: new Date(),
+            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+            amount: transaction.amount,
+            currency: transaction.currency
+          };
+
+          await db.createSubscription(subscriptionData);
+        }
+
+        // Redirect to success page
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/success?reference=${reference}`);
+      } else {
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/failed?reference=${reference}`);
+      }
+    } catch (error) {
+      console.error('Payment verification failed:', error);
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/failed`);
+    }
+  });
+
+  // Get subscription status
+  app.get('/api/subscription/status', optionalAuth, handleDemoUser, async (req, res) => {
+    try {
+      const userId = req.user?.id || req.headers['x-user-id'] as string;
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      
+      const user = await db.getUser(userId);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      
+      res.json({
+        is_premium: user.is_premium,
+        subscription_status: user.subscription_status,
+        subscription_end_date: user.subscription_end_date
+      });
+    } catch (error) {
+      console.error('Failed to get subscription status:', error);
+      res.status(500).json({ message: 'Failed to get subscription status' });
     }
   });
 

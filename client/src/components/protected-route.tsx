@@ -1,7 +1,8 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { authService } from '@/lib/supabase';
-import { User } from '@/lib/supabase';
+import { authService } from '@/lib/auth';
+import { safeNavigate } from '@/lib/navigation';
+import type { User } from '@/lib/auth';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -30,7 +31,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      setLocation('/auth');
+      safeNavigate(setLocation, '/auth');
     }
   }, [isLoading, isAuthenticated, setLocation]);
 

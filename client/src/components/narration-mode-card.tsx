@@ -1,5 +1,5 @@
 interface NarrationMode {
-  id: 'focus' | 'balanced' | 'engaging';
+  id: 'focus' | 'balanced' | 'engaging' | 'doc_theatre';
   name: string;
   icon: string;
   description: string;
@@ -65,5 +65,14 @@ export const NARRATION_MODES: NarrationMode[] = [
     bgGradient: 'bg-gradient-to-br from-rose-50 to-pink-100',
     textColor: 'text-rose-900',
     useCase: 'Making learning unforgettable'
+  },
+  {
+    id: 'doc_theatre',
+    name: 'Doc Theatre',
+    icon: '🎭',
+    description: 'Dynamic multi-voice drama for documents',
+    bgGradient: 'bg-gradient-to-br from-slate-50 to-gray-100',
+    textColor: 'text-gray-900',
+    useCase: 'PDF to Netflix-style audio'
   }
 ];

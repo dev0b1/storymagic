@@ -23,12 +23,13 @@ import {
   SkipForward
 } from 'lucide-react';
 import { useLocation } from 'wouter';
+import { safeNavigate } from '@/lib/navigation';
 
 export default function Landing() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [, setLocation] = useLocation();
 
-  const navigate = (path: string) => setLocation(path);
+  const navigate = (path: string) => safeNavigate(setLocation, path);
 
   const features = [
     {
@@ -154,19 +155,32 @@ export default function Landing() {
                 <Play className="w-5 h-5 mr-2" />
                 See Demo
               </Button>
-              <Button 
-                variant="ghost" 
-                size="lg" 
+              <Button
+                variant="ghost"
+                size="lg"
                 className="text-purple-600 hover:bg-purple-50 px-8 py-3 text-lg"
                 onClick={async () => {
                   try {
                     const response = await fetch('/api/demo-login', { method: 'POST' });
+                    if (!response.ok) throw new Error('Demo login failed');
                     const user = await response.json();
-                    localStorage.setItem('userId', user.id);
-                    localStorage.setItem('userEmail', user.email);
-                    localStorage.setItem('userName', user.name || '');
-                    localStorage.setItem('isPremium', user.is_premium ? 'true' : 'false');
-                    localStorage.setItem('storiesGenerated', user.stories_generated?.toString() || '0');
+                    // Centralize demo session handling in authService
+                    // Importing authService here would create a circular import in some setups,
+                    // so use the global auth module if available.
+                    try {
+                      // Lazy import to avoid potential circular deps
+                      const { authService } = await import('@/lib/auth');
+                      await authService.setDemoSession(user as any);
+                    } catch (e) {
+                      // Fallback: set minimal localStorage keys
+                      localStorage.setItem('demo_user', 'true');
+                      localStorage.setItem('userId', user.id);
+                      localStorage.setItem('userEmail', user.email);
+                      localStorage.setItem('userName', user.name || '');
+                      if (typeof user.is_premium !== 'undefined') localStorage.setItem('is_premium', user.is_premium ? 'true' : 'false');
+                      if (typeof user.stories_generated !== 'undefined') localStorage.setItem('stories_generated', String(user.stories_generated));
+                    }
+
                     navigate('/dashboard');
                   } catch (error) {
                     console.error('Demo login failed:', error);

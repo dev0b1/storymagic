@@ -17,9 +17,15 @@ export function AuthGuard({
   const [isChecking, setIsChecking] = useState(true);
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const isDemo = typeof window !== 'undefined' && localStorage.getItem('demo_user') === 'true';
 
   useEffect(() => {
-    // Initialize session on mount
+    // Initialize session on mount for non-demo; demo users skip Supabase session init
+    const isDemo = typeof window !== 'undefined' && localStorage.getItem('demo_user') === 'true';
+    if (isDemo) {
+      setIsChecking(false);
+      return;
+    }
     sessionManager.initialize().then(() => {
       setIsChecking(false);
     });
@@ -35,7 +41,7 @@ export function AuthGuard({
   }
 
   // Handle authentication requirement
-  if (requireAuth && !user) {
+  if (requireAuth && !user && !isDemo) {
     // Store the attempted URL to redirect back after login
     const currentPath = window.location.pathname;
     if (currentPath !== '/auth') {
