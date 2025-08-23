@@ -531,7 +531,91 @@ const generateStoryRequestSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health: DB setup check via wrapper
+  const httpServer = createServer(app);
+
+  // Comprehensive health check endpoint
+  app.get("/api/health", async (req, res) => {
+    try {
+      const health = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        database: {
+          configured: false,
+          connected: false,
+          tables: {
+            users: false,
+            stories: false
+          },
+          using_fallback: false,
+          error: null as string | null
+        },
+        api_keys: hasValidApiKeys(),
+        server: {
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+          version: process.version
+        },
+        migration_status: {
+          required: false,
+          instructions: '/DATABASE_SETUP.md'
+        }
+      };
+
+      // Check database status
+      try {
+        // Test if Supabase is configured
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        
+        if (supabaseUrl && supabaseKey && 
+            !supabaseUrl.includes('your-project') && 
+            !supabaseKey.includes('your-service-role-key')) {
+          health.database.configured = true;
+          
+          // Test connection and tables
+          try {
+            const isValid = await db.validateDatabase();
+            if (isValid) {
+              health.database.connected = true;
+              health.database.tables.users = true;
+              health.database.tables.stories = true;
+            } else {
+              health.database.error = 'Tables missing or inaccessible';
+              health.migration_status.required = true;
+            }
+          } catch (dbError) {
+            health.database.error = dbError instanceof Error ? dbError.message : 'Connection failed';
+            health.migration_status.required = true;
+          }
+        } else {
+          health.database.using_fallback = true;
+          health.database.error = 'Supabase credentials not configured';
+        }
+      } catch (error) {
+        health.database.using_fallback = true;
+        health.database.error = error instanceof Error ? error.message : 'Database check failed';
+      }
+
+      // Set appropriate status code based on database health
+      let statusCode = 200;
+      if (health.database.configured && !health.database.connected) {
+        statusCode = 503; // Service unavailable
+        health.status = 'degraded';
+      } else if (health.database.using_fallback) {
+        health.status = 'ok-fallback';
+      }
+      
+      res.status(statusCode).json(health);
+    } catch (error) {
+      res.status(500).json({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        message: error instanceof Error ? error.message : 'Health check failed'
+      });
+    }
+  });
+
+  // Simplified DB health check (legacy endpoint)
   app.get('/api/health/db', async (req, res) => {
     try {
       const demo = await db.getUser('health-check');
@@ -542,7 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Health: direct Supabase connectivity check (detailed)
+  // Direct Supabase connectivity check (legacy endpoint)
   app.get('/api/health/supabase', async (req, res) => {
     try {
       // We attempt select calls via db to surface errors if tables are missing
@@ -1610,6 +1694,5 @@ PDF Content: "${pdfText}"`;
     }
   });
 
-  const httpServer = createServer(app);
   return httpServer;
 }

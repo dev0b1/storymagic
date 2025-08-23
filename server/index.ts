@@ -34,16 +34,26 @@ if (envExists) {
     console.log(`🎵 ElevenLabs API: ${hasKeys.elevenLabs ? '✅ Configured' : '❌ Not configured'}`);
     console.log(`🤖 OpenAI API: ${hasKeys.openAI ? '✅ Configured' : '❌ Not configured'}`);
     
-    // Initialize database
-    console.log('\n🗄️ Checking database...');
-    import('./supabase.js').then(async ({ db }) => {
-      const isValid = await db.validateDatabase();
-      if (!isValid) {
-        console.log('🛠️ Setting up database...');
-        await db.setupDatabase();
+    // Initialize database (non-blocking)
+    console.log('\n🗄️ Initializing database...');
+    setImmediate(async () => {
+      try {
+        const { db } = await import('./supabase.js');
+        console.log('🔍 Validating database connection...');
+        const isValid = await db.validateDatabase();
+        if (!isValid) {
+          console.log('🛠️ Setting up database...');
+          const setupSuccess = await db.setupDatabase();
+          if (setupSuccess) {
+            console.log('✅ Database setup completed');
+          } else {
+            console.log('⚠️ Database setup had issues - check logs above');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        console.log('⚠️ Server will continue with fallback storage');
       }
-    }).catch(error => {
-      console.error('❌ Database initialization failed:', error);
     });
   } catch (error) {
     console.log('❌ Error reading .env file:', error instanceof Error ? error.message : String(error));

@@ -99,31 +99,21 @@ export const db = {
     }
 
     try {
-      const migrationsDir = path.join(process.cwd(), 'server', 'migrations');
-      const files = await fs.readdir(migrationsDir).catch(() => []);
-
-      if (files.length === 0) {
-        console.log('No migration files found in', migrationsDir);
+      // Skip migrations entirely for now - they should be run manually in Supabase dashboard
+      // or via Supabase CLI. The RPC exec_sql function doesn't exist by default.
+      console.log('⚠️ Skipping migrations - please run them manually in Supabase dashboard');
+      console.log('💡 You can find the migration files in server/migrations/');
+      
+      // Just validate that the database is accessible
+      const isValid = await validateDatabase();
+      if (isValid) {
+        console.log('✅ Database is accessible and tables exist');
         return true;
+      } else {
+        console.log('⚠️ Database tables may need to be created manually');
+        console.log('💡 Run the SQL from server/migrations/0001_initial_schema.sql in Supabase dashboard');
+        return false;
       }
-
-      // Sort files to ensure order (e.g., 0001_*.sql first)
-      files.sort();
-
-      for (const file of files) {
-        if (!file.endsWith('.sql')) continue;
-        const filePath = path.join(migrationsDir, file);
-        const sql = await fs.readFile(filePath, 'utf8');
-        console.log('Running migration:', file);
-        const { error } = await supabase.rpc('exec_sql', { sql });
-        if (error) {
-          console.error('❌ Migration error for', file, error);
-          return false;
-        }
-      }
-
-      console.log('✅ Migrations applied successfully');
-      return true;
     } catch (error) {
       console.error('❌ Database setup error:', error);
       return false;
