@@ -1,52 +1,73 @@
-@import url('https://fonts.googleapis.com/css2?family=Macondo&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(20, 14.3%, 4.1%);
-  --muted: hsl(60, 4.8%, 95.9%);
-  --muted-foreground: hsl(25, 5.3%, 44.7%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(20, 14.3%, 4.1%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(20, 14.3%, 4.1%);
-  --border: hsl(20, 5.9%, 90%);
-  --input: hsl(20, 5.9%, 90%);
-  --primary: hsl(268, 85%, 60%);
+  /* PromptBook Brand Colors */
+  --background: hsl(220, 15%, 98%);
+  --foreground: hsl(220, 25%, 8%);
+  --muted: hsl(220, 10%, 96%);
+  --muted-foreground: hsl(220, 8%, 46%);
+  --popover: hsl(220, 15%, 98%);
+  --popover-foreground: hsl(220, 25%, 8%);
+  --card: hsl(220, 15%, 100%);
+  --card-foreground: hsl(220, 25%, 8%);
+  --border: hsl(220, 13%, 91%);
+  --input: hsl(220, 13%, 91%);
+  --primary: hsl(215, 85%, 55%); /* Professional Blue */
   --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(60, 4.8%, 95.9%);
-  --secondary-foreground: hsl(24, 9.8%, 10%);
-  --accent: hsl(60, 4.8%, 95.9%);
-  --accent-foreground: hsl(24, 9.8%, 10%);
+  --secondary: hsl(220, 10%, 96%);
+  --secondary-foreground: hsl(220, 25%, 8%);
+  --accent: hsl(268, 60%, 50%); /* Refined Purple Accent */
+  --accent-foreground: hsl(0, 0%, 98%);
   --destructive: hsl(0, 84.2%, 60.2%);
   --destructive-foreground: hsl(60, 9.1%, 97.8%);
-  --ring: hsl(20, 14.3%, 4.1%);
-  --radius: 0.5rem;
+  --ring: hsl(215, 85%, 55%);
+  --radius: 0.75rem;
+  
+  /* PromptBook Specific Colors */
+  --promptbook-blue: hsl(215, 85%, 55%);
+  --promptbook-blue-light: hsl(215, 85%, 65%);
+  --promptbook-blue-dark: hsl(215, 85%, 45%);
+  --promptbook-accent: hsl(268, 60%, 50%);
+  --promptbook-success: hsl(142, 71%, 45%);
+  --promptbook-warning: hsl(38, 92%, 50%);
+  --promptbook-gray: hsl(220, 8%, 46%);
+  --promptbook-light-gray: hsl(220, 13%, 91%);
 }
 
 .dark {
-  --background: hsl(240, 10%, 3.9%);
-  --foreground: hsl(0, 0%, 98%);
-  --muted: hsl(240, 3.7%, 15.9%);
-  --muted-foreground: hsl(240, 5%, 64.9%);
-  --popover: hsl(240, 10%, 3.9%);
-  --popover-foreground: hsl(0, 0%, 98%);
-  --card: hsl(240, 10%, 3.9%);
-  --card-foreground: hsl(0, 0%, 98%);
-  --border: hsl(240, 3.7%, 15.9%);
-  --input: hsl(240, 3.7%, 15.9%);
-  --primary: hsl(268, 85%, 60%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(240, 3.7%, 15.9%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --accent: hsl(240, 3.7%, 15.9%);
-  --accent-foreground: hsl(0, 0%, 98%);
+  --background: hsl(222, 20%, 7%);
+  --foreground: hsl(220, 15%, 95%);
+  --muted: hsl(222, 15%, 12%);
+  --muted-foreground: hsl(220, 8%, 65%);
+  --popover: hsl(222, 20%, 7%);
+  --popover-foreground: hsl(220, 15%, 95%);
+  --card: hsl(222, 20%, 9%);
+  --card-foreground: hsl(220, 15%, 95%);
+  --border: hsl(222, 15%, 15%);
+  --input: hsl(222, 15%, 15%);
+  --primary: hsl(215, 85%, 60%);
+  --primary-foreground: hsl(220, 25%, 8%);
+  --secondary: hsl(222, 15%, 12%);
+  --secondary-foreground: hsl(220, 15%, 95%);
+  --accent: hsl(268, 60%, 55%);
+  --accent-foreground: hsl(220, 25%, 8%);
   --destructive: hsl(0, 62.8%, 30.6%);
   --destructive-foreground: hsl(0, 0%, 98%);
-  --ring: hsl(240, 4.9%, 83.9%);
-  --radius: 0.5rem;
+  --ring: hsl(215, 85%, 60%);
+  --radius: 0.75rem;
+  
+  /* Dark mode PromptBook colors */
+  --promptbook-blue: hsl(215, 85%, 60%);
+  --promptbook-blue-light: hsl(215, 85%, 70%);
+  --promptbook-blue-dark: hsl(215, 85%, 50%);
+  --promptbook-accent: hsl(268, 60%, 55%);
+  --promptbook-success: hsl(142, 71%, 50%);
+  --promptbook-warning: hsl(38, 92%, 55%);
+  --promptbook-gray: hsl(220, 8%, 65%);
+  --promptbook-light-gray: hsl(222, 15%, 15%);
 }
 
 @layer base {
@@ -60,45 +81,60 @@
 }
 
 @layer utilities {
-  .font-magical {
-    font-family: 'Macondo', cursive;
+  .font-promptbook {
+    font-family: 'Poppins', sans-serif;
   }
   
-  .text-glow {
-    text-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
+  .text-professional {
+    color: var(--promptbook-gray);
   }
   
-  .card-glow {
-    box-shadow: 0 4px 20px rgba(147, 51, 234, 0.1);
+  .text-promptbook-blue {
+    color: var(--promptbook-blue);
   }
   
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
+  .bg-promptbook-blue {
+    background-color: var(--promptbook-blue);
   }
   
-  .animate-glow {
-    animation: glow 2s ease-in-out infinite alternate;
+  .bg-promptbook-accent {
+    background-color: var(--promptbook-accent);
   }
   
-  .bg-gradient-radial {
-    background: radial-gradient(circle, var(--tw-gradient-stops));
+  .border-promptbook-blue {
+    border-color: var(--promptbook-blue);
+  }
+  
+  .card-professional {
+    box-shadow: 0 2px 8px rgba(30, 58, 138, 0.08);
+    border: 1px solid var(--promptbook-light-gray);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.6s ease-out;
+  }
+  
+  .bg-gradient-professional {
+    background: linear-gradient(135deg, var(--promptbook-blue), var(--promptbook-accent));
+  }
+  
+  .bg-gradient-subtle {
+    background: linear-gradient(135deg, hsl(220, 15%, 98%), hsl(215, 85%, 96%));
   }
 }
 
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes glow {
-  0% { text-shadow: 0 0 5px #9333ea, 0 0 10px #9333ea, 0 0 15px #9333ea; }
-  100% { text-shadow: 0 0 10px #ec4899, 0 0 20px #ec4899, 0 0 30px #ec4899; }
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 0; transform: scale(0); }
-  50% { opacity: 1; transform: scale(1); }
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes typing {
@@ -111,15 +147,18 @@
   100% { background-position: calc(200px + 100%) 0; }
 }
 
-@keyframes magicPulse {
+@keyframes professionalPulse {
   0%, 100% { 
-    background: linear-gradient(135deg, rgba(147, 51, 234, 0.1), rgba(219, 39, 119, 0.1)); 
-    box-shadow: 0 0 20px rgba(147, 51, 234, 0.2);
+    box-shadow: 0 0 0 0 rgba(30, 58, 138, 0.4);
   }
   50% { 
-    background: linear-gradient(135deg, rgba(219, 39, 119, 0.15), rgba(147, 51, 234, 0.15)); 
-    box-shadow: 0 0 30px rgba(219, 39, 119, 0.3);
+    box-shadow: 0 0 0 8px rgba(30, 58, 138, 0);
   }
+}
+
+@keyframes audioWave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.5); }
 }
 
 .animate-shimmer {
@@ -128,18 +167,24 @@
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-.animate-magic-pulse {
-  animation: magicPulse 3s ease-in-out infinite;
+.animate-professional-pulse {
+  animation: professionalPulse 2s ease-in-out infinite;
 }
 
-.story-background {
-  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,250,252,0.95));
-  backdrop-filter: blur(10px);
+.animate-audio-wave {
+  animation: audioWave 1s ease-in-out infinite;
+}
+
+.professional-background {
+  background: linear-gradient(135deg, 
+    rgba(30, 58, 138, 0.02) 0%, 
+    rgba(59, 130, 246, 0.03) 50%, 
+    rgba(147, 51, 234, 0.02) 100%);
   position: relative;
   overflow: hidden;
 }
 
-.story-background::before {
+.professional-background::before {
   content: '';
   position: absolute;
   top: 0;
@@ -147,9 +192,31 @@
   right: 0;
   bottom: 0;
   background: 
-    radial-gradient(circle at 20% 50%, rgba(147, 51, 234, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(219, 39, 119, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 40% 80%, rgba(147, 51, 234, 0.02) 0%, transparent 50%);
-  animation: magicPulse 6s ease-in-out infinite;
+    radial-gradient(circle at 20% 50%, rgba(30, 58, 138, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.02) 0%, transparent 50%);
   pointer-events: none;
+}
+
+/* Audio Player Enhancements */
+.audio-progress-bar {
+  background: linear-gradient(90deg, var(--promptbook-blue) var(--progress, 0%), var(--promptbook-light-gray) var(--progress, 0%));
+  transition: background 0.1s ease;
+}
+
+.audio-wave-visual {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.audio-wave-bar {
+  width: 3px;
+  background: var(--promptbook-blue);
+  border-radius: 1px;
+  opacity: 0.6;
+}
+
+.audio-wave-bar.active {
+  opacity: 1;
+  animation: audioWave 0.8s ease-in-out infinite;
 }

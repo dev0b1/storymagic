@@ -14,23 +14,25 @@ export const users = pgTable("users", {
   subscription_status: text("subscription_status").default('free'),
   subscription_id: text("subscription_id"),
   subscription_end_date: timestamp("subscription_end_date"),
-  paystack_customer_id: text("paystack_customer_id"),
-  paystack_customer_code: text("paystack_customer_code")
+  lemonsqueezy_customer_id: text("lemonsqueezy_customer_id"),
+  lemonsqueezy_subscription_id: text("lemonsqueezy_subscription_id")
 });
 
 export const subscriptions = pgTable("subscriptions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   user_id: text("user_id").notNull().references(() => users.id),
-  paystack_subscription_id: text("paystack_subscription_id").notNull(),
-  paystack_authorization_code: text("paystack_authorization_code"),
+  lemonsqueezy_subscription_id: text("lemonsqueezy_subscription_id").notNull(),
+  lemonsqueezy_order_id: text("lemonsqueezy_order_id"),
+  lemonsqueezy_product_id: text("lemonsqueezy_product_id"),
+  lemonsqueezy_variant_id: text("lemonsqueezy_variant_id"),
   status: text("status").notNull().default('inactive'),
   plan_type: text("plan_type").notNull(),
   current_period_start: timestamp("current_period_start", { withTimezone: true }).notNull(),
   current_period_end: timestamp("current_period_end", { withTimezone: true }).notNull(),
-  amount: integer("amount").notNull(), // Amount in kobo (Nigerian currency)
-  currency: text("currency").default('NGN'),
+  amount: integer("amount").notNull(), // Amount in cents (USD)
+  currency: text("currency").default('USD'),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updated_at: timestamp("created_at", { withTimezone: true }).defaultNow()
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
 export const stories = pgTable("stories", {
@@ -56,14 +58,16 @@ export const insertUserSchema = createInsertSchema(users, {
   subscription_status: z.enum(['free', 'active', 'inactive', 'cancelled']).optional(),
   subscription_id: z.string().optional(),
   subscription_end_date: z.date().optional(),
-  paystack_customer_id: z.string().optional(),
-  paystack_customer_code: z.string().optional()
+  lemonsqueezy_customer_id: z.string().optional(),
+  lemonsqueezy_subscription_id: z.string().optional()
 });
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).pick({
   user_id: true,
-  paystack_subscription_id: true,
-  paystack_authorization_code: true,
+  lemonsqueezy_subscription_id: true,
+  lemonsqueezy_order_id: true,
+  lemonsqueezy_product_id: true,
+  lemonsqueezy_variant_id: true,
   status: true,
   plan_type: true,
   current_period_start: true,

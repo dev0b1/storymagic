@@ -1,0 +1,6 @@
+PLACEHOLDER: speaker_change.mp3
+Description: Subtle audio cue for smooth transitions between speakers
+Suggested content: Gentle crossfade, soft click, or brief silence gap (0.2-0.4 seconds)
+Usage: Triggered by [SFX: speaker_change] cues when switching between voices
+Recommended volume: -24dB to -20dB normalized (very subtle)
+Format: MP3, 128kbps minimum

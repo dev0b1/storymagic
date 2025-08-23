@@ -247,11 +247,11 @@ export function StoryReader({ story, narrationMode, storyId, userId, usedFallbac
       await generateAudio();
     };
     const handleDownload = async () => { await downloadAudio(); };
-    window.addEventListener('storymagic:generate-audio', handleGenerate);
-    window.addEventListener('storymagic:download-audio', handleDownload);
+    window.addEventListener('promptbook:generate-audio', handleGenerate);
+    window.addEventListener('promptbook:download-audio', handleDownload);
     return () => {
-      window.removeEventListener('storymagic:generate-audio', handleGenerate);
-      window.removeEventListener('storymagic:download-audio', handleDownload);
+      window.removeEventListener('promptbook:generate-audio', handleGenerate);
+      window.removeEventListener('promptbook:download-audio', handleDownload);
     };
   }, [audioUrl, storyId, userId]);
 

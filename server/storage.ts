@@ -41,7 +41,8 @@ export class MemStorage implements IStorage {
   subscription_status: insertUser.subscription_status ?? 'free',
   subscription_id: insertUser.subscription_id ?? null,
   subscription_end_date: insertUser.subscription_end_date ?? null,
-  stripe_customer_id: insertUser.stripe_customer_id ?? null,
+  lemonsqueezy_customer_id: insertUser.lemonsqueezy_customer_id ?? null,
+  lemonsqueezy_subscription_id: insertUser.lemonsqueezy_subscription_id ?? null,
   created_at: new Date(),
   updated_at: new Date()
     };
@@ -60,7 +61,8 @@ export class MemStorage implements IStorage {
   subscription_status: insertUser.subscription_status ?? 'free',
   subscription_id: insertUser.subscription_id ?? null,
   subscription_end_date: insertUser.subscription_end_date ?? null,
-  stripe_customer_id: insertUser.stripe_customer_id ?? null,
+  lemonsqueezy_customer_id: insertUser.lemonsqueezy_customer_id ?? null,
+  lemonsqueezy_subscription_id: insertUser.lemonsqueezy_subscription_id ?? null,
   created_at: new Date(),
   updated_at: new Date()
     };

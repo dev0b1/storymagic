@@ -116,13 +116,21 @@ export const authService = {
 
   async signOut() {
     try {
-      // Clear demo markers, if any
+      // Clear ALL localStorage items related to user session
       localStorage.removeItem('demo_user');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('is_premium');
+      localStorage.removeItem('stories_generated');
+      localStorage.removeItem('subscription_status');
+      
       // Attempt to sign out of Supabase if configured
       if (isSupabaseConfigured) {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
       }
+      
       return { success: true };
     } catch (error) {
       console.error('Sign out failed:', error);

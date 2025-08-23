@@ -107,10 +107,10 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-200 via-pink-100 to-white relative flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative flex items-center justify-center p-4">
       <MagicSparkles />
       
-      <div className="relative z-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl p-8 max-w-md w-full shadow-2xl border-4 border-gray-300">
+      <div className="relative z-10 bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-200">
         <Link href="/">
           <Button 
             variant="ghost" 
@@ -123,9 +123,11 @@ export default function Auth() {
         </Link>
         
         <div className="text-center mb-8">
-          <Sparkles className="text-4xl text-purple-600 mb-4 mx-auto w-12 h-12 animate-spin" />
-          <h3 className="font-magical text-3xl text-purple-800 mb-2">Enter the Realm</h3>
-          <p className="text-gray-600">Magic link will be sent to your scroll</p>
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to StoryMagic</h3>
+          <p className="text-gray-600">Transform your documents into audio stories</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">

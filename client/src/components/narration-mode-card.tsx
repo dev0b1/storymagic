@@ -1,5 +1,5 @@
 interface NarrationMode {
-  id: 'focus' | 'balanced' | 'engaging' | 'doc_theatre';
+  id: 'focus' | 'engaging' | 'doc_theatre';
   name: string;
   icon: string;
   description: string;
@@ -41,38 +41,29 @@ export function NarrationModeCard({ mode, selected, onSelect }: NarrationModeCar
 export const NARRATION_MODES: NarrationMode[] = [
   {
     id: 'focus',
-    name: 'Clarity',
-    icon: '✨',
-    description: 'Crystal-clear knowledge delivery',
+    name: 'Lecture',
+    icon: '🎓',
+    description: 'Clear, structured explanation',
     bgGradient: 'bg-gradient-to-br from-violet-50 to-purple-100',
     textColor: 'text-purple-900',
-    useCase: 'When precision meets enlightenment'
-  },
-  {
-    id: 'balanced',
-    name: 'Guide',
-    icon: '🎯',
-    description: 'Your friendly knowledge companion',
-    bgGradient: 'bg-gradient-to-br from-amber-50 to-orange-100',
-    textColor: 'text-orange-900',
-    useCase: 'Like learning from a brilliant friend'
+    useCase: 'Educational and instructional content'
   },
   {
     id: 'engaging',
-    name: 'Storyteller',
-    icon: '💫',
-    description: 'Where knowledge meets imagination',
-    bgGradient: 'bg-gradient-to-br from-rose-50 to-pink-100',
-    textColor: 'text-rose-900',
-    useCase: 'Making learning unforgettable'
+    name: 'Narration',
+    icon: '📖',
+    description: 'Neutral, professional reading',
+    bgGradient: 'bg-gradient-to-br from-blue-50 to-indigo-100',
+    textColor: 'text-blue-900',
+    useCase: 'Documents and formal content'
   },
   {
     id: 'doc_theatre',
-    name: 'Doc Theatre',
-    icon: '🎭',
-    description: 'Dynamic multi-voice drama for documents',
+    name: 'Podcast',
+    icon: '🎙️',
+    description: 'Conversational, engaging style',
     bgGradient: 'bg-gradient-to-br from-slate-50 to-gray-100',
     textColor: 'text-gray-900',
-    useCase: 'PDF to Netflix-style audio'
+    useCase: 'Interactive and discussion format'
   }
 ];

@@ -13,7 +13,7 @@ import { config, hasValidApiKeys } from './config.js';
 import { requireAuth, optionalAuth, handleDemoUser } from './middleware/auth';
 import { User } from '@supabase/supabase-js';
 import type { User as DbUser } from '@shared/schema';
-import { paystackService } from './services/paystack.js';
+import { lemonSqueezyService } from './services/lemonsqueezy.js';
 
 // Safely import pdf-parse to avoid test file errors
 let pdf: any = null;
@@ -82,52 +82,43 @@ function generateAdaptivePrompt(narrationMode: 'focus' | 'balanced' | 'engaging'
   const mode = narrationModes[narrationMode as keyof typeof narrationModes];
   
   const modeInstructions = {
-    focus: `You are a brilliant mentor with the gift of clarity. Your specialty is transforming complex information into crystal-clear understanding.
+    focus: `You are an expert lecturer creating a clear, structured audio lesson.
 
-Approach this content like a master teacher would:
-- Illuminate complex concepts with precise, enlightening explanations
-- Structure information in a logical, flowing sequence that builds understanding
-- Use clear, vivid language that makes abstract concepts tangible
-- Break down complicated ideas into digestible insights
-- Maintain absolute precision while making the content accessible
-- When appropriate, use analogies that create "aha!" moments
+Produce a lecture that:
+- Starts with a 1-2 sentence objective (what the listener will learn)
+- Breaks content into short, logical sections with concise explanations
+- Uses simple examples or analogies where helpful (without inventing facts)
+- Summarizes key takeaways at the end
 
-Your goal is to make the reader feel like they're experiencing a moment of perfect clarity, where everything just clicks.`,
+Tone: professional, calm, concise. Do not add information not present in the source.`,
 
-    balanced: `You are a wise and friendly guide, skilled at making learning feel like an engaging conversation with a brilliant friend.
+    balanced: `You are a friendly guide explaining the material conversationally.
 
-Transform this content as if you're sharing knowledge over coffee:
-- Use a warm, approachable tone that invites understanding
-- Create a natural flow that feels like an engaging discussion
-- Balance educational depth with conversational accessibility
-- Include thoughtful insights that deepen understanding
-- Use relatable examples that connect with the reader
-- Keep technical accuracy while making the content engaging
+Produce a guide that:
+- Explains concepts plainly with natural transitions
+- Balances brevity with clarity, avoids unnecessary fluff
+- Keeps the content accurate to the source
 
-Your goal is to make the reader feel like they're learning effortlessly from someone who deeply understands both the subject and how to explain it.`,
+Tone: approachable, helpful, focused on clarity without storytelling flourishes.`,
 
-    engaging: `You are a master storyteller with the ability to weave knowledge into captivating narratives while maintaining perfect accuracy.
+    engaging: `You are a factual narrator crafting an engaging narrative while preserving accuracy.
 
-Transform this content using the art of storytelling:
-- Create a narrative flow that makes learning magical
-- Use vivid, engaging language that brings concepts to life
-- Weave examples and explanations into memorable stories
-- Build anticipation and interest throughout the piece
-- Include "story-worthy" moments that highlight key insights
-- Keep factual precision while making the content unforgettable
+Produce a narrative that:
+- Weaves the material into a flowing story structure (setup → development → concise resolution)
+- Uses vivid but precise language that never invents facts
+- Emphasizes memorable moments and insights already present in the source
 
-Your goal is to make the reader feel like they're experiencing an engaging story that naturally leads to understanding and insight.`
-    ,
-    doc_theatre: `You are a creative director producing a natural, multi-voice audio drama based on the document.
+Tone: engaging and professional; do not dramatize beyond the source content.`,
+    
+    doc_theatre: `You are producing a multi-voice podcast episode (host + 2–3 guests) based strictly on the source.
 
-Create a dynamic doc-theatre script:
-- Identify roles (e.g., Narrator, Expert A, Expert B, Host) from the context
-- Alternate and occasionally overlap voices for realism; include brief interjections
-- Use subtle sound effect cues [SFX: ] and background ambience cues [BG: ] tied to content
-- Keep it natural, concise, and faithful to the source (no added facts)
-- Mark interruptions with em-dashes and overlapping with (overlapping)
+Produce a podcast script that:
+- Includes a Host and 2–3 Guests (assign sensible roles like Researcher, Practitioner, Analyst)
+- Alternates speakers with brief, natural interjections; short overlaps can be marked as (overlapping)
+- Optionally include subtle cue markers like [SFX: soft_intro] or [BG: studio] where clearly appropriate
+- Always remains faithful to the source; never add facts
 
-Your goal is a vivid, engaging, debate/story/drama depending on content, that remains accurate to the document.`
+Tone: natural roundtable conversation, concise and informative.`
   };
   
   return `${modeInstructions[narrationMode as keyof typeof modeInstructions]}
@@ -149,13 +140,9 @@ Critical constraints:
 
 Guidelines:
 - Maintain 100% factual accuracy
-- Preserve all key information and data points
-- Use clear, professional language appropriate for the content type
-- Create logical flow and structure (use paragraphs, headings if appropriate)
-- Ensure the output is engaging and accessible
+- Use clear, professional language appropriate for the selected mode
+- Create logical flow and structure
 - Keep the tone consistent with the selected narration mode
-- Avoid childish or overly simplistic language
-- Focus on educational value and clarity
 
 Transform the following content:`;
 }
@@ -185,6 +172,11 @@ async function createBackgroundMusic(durationSeconds: number, character: string 
       frequencies: [330, 494, 659], // Brighter, more dynamic tones
       volumes: [0.024, 0.018, 0.013],
       description: 'Dramatic narrative ambience'
+    },
+    doc_theatre: {
+      frequencies: [180, 270, 450, 680], // Rich podcast studio frequencies
+      volumes: [0.008, 0.012, 0.015, 0.006],
+      description: 'Professional podcast studio ambience'
     }
   } as const;
   
@@ -202,60 +194,154 @@ async function createBackgroundMusic(durationSeconds: number, character: string 
   }
 }
 
-// Enhanced function to create dynamic background music with multiple layers
-async function createDynamicBackgroundMusic(durationSeconds: number, character: string = 'balanced'): Promise<string> {
+// Enhanced function to create dynamic background music with multiple layers and ambient sounds
+async function createDynamicBackgroundMusic(durationSeconds: number, character: string = 'balanced', ambientType: string = 'none'): Promise<string> {
   const tempDir = path.join(process.cwd(), 'tmp');
   await fs.mkdir(tempDir, { recursive: true });
   
   const backgroundFile = path.join(tempDir, `dynamic_bg_${character}_${Date.now()}.wav`);
   
-  // Dynamic sound profiles with multiple layers
-  const dynamicProfiles = {
+  // Enhanced ambient sound profiles with contextual atmosphere
+  const ambientProfiles = {
+    // Study/Focus environments
+    'library-quiet': {
+      name: 'Quiet Library',
+      baseFreq: 200,
+      baseVol: 0.012,
+      ambientFreqs: [150, 300, 450],
+      ambientVols: [0.008, 0.006, 0.004],
+      description: 'Subtle paper rustling and quiet atmosphere'
+    },
+    'rain-gentle': {
+      name: 'Gentle Rain',
+      baseFreq: 180,
+      baseVol: 0.015,
+      ambientFreqs: [120, 240, 480, 960],
+      ambientVols: [0.012, 0.010, 0.008, 0.004],
+      description: 'Soft rainfall for deep concentration'
+    },
+    'cafe-ambient': {
+      name: 'Coffee Shop',
+      baseFreq: 220,
+      baseVol: 0.018,
+      ambientFreqs: [160, 320, 640],
+      ambientVols: [0.010, 0.012, 0.006],
+      description: 'Warm cafe atmosphere with subtle chatter'
+    },
+    
+    // Nature environments
+    'forest-birds': {
+      name: 'Forest Sounds',
+      baseFreq: 260,
+      baseVol: 0.014,
+      ambientFreqs: [880, 1320, 1760],
+      ambientVols: [0.008, 0.006, 0.004],
+      description: 'Birds chirping and rustling leaves'
+    },
+    'ocean-waves': {
+      name: 'Ocean Waves',
+      baseFreq: 140,
+      baseVol: 0.020,
+      ambientFreqs: [70, 210, 420],
+      ambientVols: [0.015, 0.010, 0.008],
+      description: 'Rhythmic waves and sea breeze'
+    },
+    
+    // Professional environments
+    'office-subtle': {
+      name: 'Professional Office',
+      baseFreq: 240,
+      baseVol: 0.010,
+      ambientFreqs: [180, 360, 540],
+      ambientVols: [0.006, 0.008, 0.004],
+      description: 'Subtle keyboard clicks and air conditioning'
+    },
+    'fireplace': {
+      name: 'Cozy Fireplace',
+      baseFreq: 160,
+      baseVol: 0.016,
+      ambientFreqs: [80, 320, 640],
+      ambientVols: [0.012, 0.010, 0.006],
+      description: 'Crackling fire for storytelling mode'
+    },
+    
+    // Dynamic sound profiles by narration mode
     focus: {
-      // Layer 1: Base ambient tone
+      name: 'Focus Mode',
       baseFreq: 220,
       baseVol: 0.015,
-      // Layer 2: Gentle wind-like modulation
-      modFreq: 0.3,
-      modDepth: 5,
-      // Layer 3: Occasional sparkles
-      sparkleFreq: 880,
-      sparkleVol: 0.008,
-      sparkleRate: 0.5
-    },
-    engaging: {
-      // Layer 1: Energetic base
-      baseFreq: 440,
-      baseVol: 0.02,
-      // Layer 2: Fast modulation for excitement
-      modFreq: 0.8,
-      modDepth: 8,
-      // Layer 3: Fire crackle effect
-      sparkleFreq: 660,
-      sparkleVol: 0.012,
-      sparkleRate: 1.2
+      ambientFreqs: [440, 880],
+      ambientVols: [0.008, 0.004],
+      description: 'Calm, steady tones for concentration'
     },
     balanced: {
-      // Layer 1: Soft melodic base
+      name: 'Balanced Mode',
       baseFreq: 196,
       baseVol: 0.012,
-      // Layer 2: Gentle wave-like modulation
-      modFreq: 0.2,
-      modDepth: 3,
-      // Layer 3: Gentle chimes
-      sparkleFreq: 523,
-      sparkleVol: 0.006,
-      sparkleRate: 0.3
+      ambientFreqs: [392, 523],
+      ambientVols: [0.010, 0.006],
+      description: 'Natural, warm educational atmosphere'
+    },
+    engaging: {
+      name: 'Engaging Mode',
+      baseFreq: 440,
+      baseVol: 0.020,
+      ambientFreqs: [660, 880],
+      ambientVols: [0.012, 0.008],
+      description: 'Dynamic storytelling ambience'
+    },
+    doc_theatre: {
+      name: 'Podcast Studio',
+      baseFreq: 140,
+      baseVol: 0.010,
+      ambientFreqs: [270, 450, 680],
+      ambientVols: [0.008, 0.006, 0.004],
+      description: 'Professional studio atmosphere'
     }
   };
   
-  const profile = dynamicProfiles[(character as keyof typeof dynamicProfiles)] || dynamicProfiles.balanced;
+  // Select ambient profile (prioritize specific ambient type, fall back to narration mode)
+  const profile = ambientProfiles[ambientType as keyof typeof ambientProfiles] || 
+                  ambientProfiles[character as keyof typeof ambientProfiles] || 
+                  ambientProfiles.balanced;
   
-  // Create dynamic background with multiple layers
-  const command = `ffmpeg -f lavfi -i "sine=frequency=${profile.baseFreq}:duration=${durationSeconds}" -f lavfi -i "sine=frequency=${profile.baseFreq + profile.modDepth}:duration=${durationSeconds}" -f lavfi -i "sine=frequency=${profile.sparkleFreq}:duration=${durationSeconds}" -filter_complex "[0:a]volume=${profile.baseVol}[base];[1:a]volume=${profile.baseVol * 0.7}[mod];[2:a]volume=${profile.sparkleVol}[sparkle];[base][mod][sparkle]amix=inputs=3:duration=longest:dropout_transition=3[out]" -map "[out]" -y "${backgroundFile}"`;
+  console.log(`🎵 Generating background audio: ${profile.name} - ${profile.description}`);
+  
+  // Build FFmpeg command for layered ambient audio
+  const inputs: string[] = [];
+  const volumes: string[] = [];
+  const mixInputs: string[] = [];
+  
+  // Base frequency
+  inputs.push(`-f lavfi -i "sine=frequency=${profile.baseFreq}:duration=${durationSeconds}"`);
+  volumes.push(`[${inputs.length - 1}:a]volume=${profile.baseVol}[base]`);
+  mixInputs.push('[base]');
+  
+  // Ambient frequencies
+  profile.ambientFreqs.forEach((freq, index) => {
+    inputs.push(`-f lavfi -i "sine=frequency=${freq}:duration=${durationSeconds}"`);
+    volumes.push(`[${inputs.length - 1}:a]volume=${profile.ambientVols[index]}[amb${index}]`);
+    mixInputs.push(`[amb${index}]`);
+  });
+  
+  // Add subtle modulation for realism
+  if (ambientType !== 'none') {
+    const modFreq = profile.baseFreq * 0.1;
+    inputs.push(`-f lavfi -i "sine=frequency=${modFreq}:duration=${durationSeconds}"`);
+    volumes.push(`[${inputs.length - 1}:a]volume=0.003[mod]`);
+    mixInputs.push('[mod]');
+  }
+  
+  const inputsStr = inputs.join(' ');
+  const volumesStr = volumes.join(';');
+  const mixStr = mixInputs.join('');
+  const inputCount = inputs.length;
+  
+  const command = `ffmpeg ${inputsStr} -filter_complex "${volumesStr};${mixStr}amix=inputs=${inputCount}:duration=longest:dropout_transition=2[out]" -map "[out]" -y "${backgroundFile}"`;
   
   try {
     await execAsync(command);
+    console.log(`✅ Generated ${profile.name} background audio`);
     return backgroundFile;
   } catch (error) {
     console.log('Dynamic background music generation failed, falling back to simple version:', error);
@@ -339,6 +425,105 @@ function getOpenAIClient(): OpenAI {
   return openai;
 }
 
+// Enhanced podcast script processing with natural conversation flow and SFX
+async function enhancePodcastScript(script: string): Promise<string> {
+  console.log('🎙️ Enhancing podcast script with natural conversation flow...');
+  
+  let processed = script;
+  
+  // Step 1: Add podcast intro and studio ambience
+  processed = `[SFX: podcast_intro]
+[BG: studio_ambience]
+
+${processed}`;
+  
+  // Step 2: Enhance speaker transitions with natural SFX
+  // Look for speaker patterns like "Host:", "Guest:", "Researcher:", etc.
+  processed = processed.replace(/\n\n([A-Z][a-zA-Z\s]+:)/g, '\n\n[SFX: speaker_transition]\n$1');
+  
+  // Step 3: Handle interruptions and natural speech patterns
+  // Convert em-dashes to interruption cues
+  processed = processed.replace(/—([^—]+)—/g, ' [SFX: interruption] $1 [SFX: resume] ');
+  processed = processed.replace(/—/g, ' [SFX: interruption] —');
+  
+  // Step 4: Handle overlapping speech markers
+  processed = processed.replace(/\(overlapping\)/gi, '[SFX: voices_overlap]');
+  processed = processed.replace(/\(overlap\)/gi, '[SFX: voices_overlap]');
+  
+  // Step 5: Add natural pauses and emphasis
+  // Look for ellipses and add thoughtful pause cues
+  processed = processed.replace(/\.{3}/g, ' [SFX: thoughtful_pause] ');
+  
+  // Step 6: Add emphasis for important points
+  // Look for words in ALL CAPS and add emphasis cues
+  processed = processed.replace(/\b[A-Z]{3,}\b/g, '[SFX: emphasis] $& [SFX: emphasis_end]');
+  
+  // Step 7: Add section transitions
+  // Look for major topic shifts (double line breaks followed by new speakers)
+  const paragraphs = processed.split('\n\n');
+  if (paragraphs.length > 3) {
+    // Add transition after first major section
+    const midPoint = Math.floor(paragraphs.length / 2);
+    paragraphs.splice(midPoint, 0, '[SFX: topic_transition]');
+    processed = paragraphs.join('\n\n');
+  }
+  
+  // Step 8: Add natural conversation fillers for realism
+  // Randomly add subtle conversation markers (but sparingly)
+  const conversationMarkers = [
+    '[SFX: agreement_hum]',
+    '[SFX: thoughtful_mm]',
+    '[SFX: understanding_ah]'
+  ];
+  
+  // Add markers to some speaker transitions (not all, to avoid overuse)
+  const speakerTransitions = processed.match(/\[SFX: speaker_transition\]/g);
+  if (speakerTransitions && speakerTransitions.length > 2) {
+    // Add conversation markers to about 30% of transitions
+    let transitionCount = 0;
+    processed = processed.replace(/\[SFX: speaker_transition\]/g, (match) => {
+      transitionCount++;
+      if (transitionCount % 3 === 0) { // Every 3rd transition
+        const marker = conversationMarkers[Math.floor(Math.random() * conversationMarkers.length)];
+        return `${match}\n${marker}`;
+      }
+      return match;
+    });
+  }
+  
+  // Step 9: Add closing sequence
+  processed = `${processed}\n\n[SFX: conversation_wind_down]\n[SFX: podcast_outro]\n[BG: fade_out]`;
+  
+  console.log('✅ Podcast script enhanced with natural conversation flow');
+  return processed;
+}
+
+// Function to extract speakers from podcast script for multi-voice TTS
+function extractSpeakers(script: string): { name: string, role: string }[] {
+  const speakers: { name: string, role: string }[] = [];
+  const speakerPattern = /^([A-Z][a-zA-Z\s]+):/gm;
+  const matches = script.match(speakerPattern);
+  
+  if (matches) {
+    const uniqueSpeakers = [...new Set(matches.map(m => m.replace(':', '').trim()))];
+    uniqueSpeakers.forEach((speaker, index) => {
+      let role = 'Guest';
+      const lowerSpeaker = speaker.toLowerCase();
+      
+      if (lowerSpeaker.includes('host')) role = 'Host';
+      else if (lowerSpeaker.includes('researcher')) role = 'Researcher';
+      else if (lowerSpeaker.includes('analyst')) role = 'Analyst';
+      else if (lowerSpeaker.includes('practitioner')) role = 'Practitioner';
+      else if (lowerSpeaker.includes('expert')) role = 'Expert';
+      else role = `Guest${index + 1}`;
+      
+      speakers.push({ name: speaker, role });
+    });
+  }
+  
+  return speakers;
+}
+
 const generateStoryRequestSchema = z.object({
   text: z.string().min(1),
   character: z.enum(["lumi", "spark", "bella"]),
@@ -405,9 +590,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (effectiveUserId && user) {
         const storiesCount = user.stories_generated;
         
-        if (!isPremium && storiesCount >= 2) {
+        if (!isPremium && storiesCount >= 10) {
           return res.status(403).json({ 
-            message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
+            message: 'Free users are limited to 10 stories. Upgrade to premium for unlimited stories!',
             code: 'LIMIT_REACHED'
           });
         }
@@ -473,6 +658,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let savedStory = null;
       const storyUserId = effectiveUserId || 'anonymous';
       console.log('💾 Saving story for user:', storyUserId);
+
+      // Enhanced SFX and conversation flow processing for Podcast mode
+      if (narrationMode === 'doc_theatre' && typeof generatedStory === 'string') {
+        generatedStory = await enhancePodcastScript(generatedStory);
+      }
+
       savedStory = await db.createStory({
         user_id: storyUserId,
         input_text: inputText,
@@ -906,97 +1097,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Paystack payment endpoints
-  app.post('/api/payment/initialize', optionalAuth, handleDemoUser, async (req, res) => {
+  // Lemon Squeezy payment endpoints
+  app.post('/api/payment/lemonsqueezy/create-checkout', optionalAuth, handleDemoUser, async (req, res) => {
     try {
-      const { email, amount, reference } = req.body;
-      const userId = req.user?.id || req.headers['x-user-id'] as string;
+      const { email, userId } = req.body;
+      const authUserId = req.user?.id || req.headers['x-user-id'] as string;
+      const effectiveUserId = userId || authUserId;
       
-      if (!email || !amount || !reference) {
-        return res.status(400).json({ message: 'Missing required fields' });
+      if (!email || !effectiveUserId) {
+        return res.status(400).json({ message: 'Email and userId are required' });
       }
 
-      // Create or get Paystack customer
-      let customer;
-      try {
-        customer = await paystackService.createCustomer(email, req.user?.user_metadata?.name);
-      } catch (error) {
-        // Customer might already exist, try to get them
-        console.log('Customer creation failed, might already exist:', error);
+      // Get user to determine if they can upgrade
+      const user = await db.getUser(effectiveUserId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
       }
 
-      // Initialize transaction
-      const transaction = await paystackService.initializeTransaction({
+      if (user.is_premium) {
+        return res.status(400).json({ message: 'User is already premium' });
+      }
+
+      // Create Lemon Squeezy checkout session
+      const checkout = await lemonSqueezyService.createCheckout({
         email,
-        amount: amount, // Amount in Naira
-        reference,
-        callback_url: `${req.protocol}://${req.get('host')}/api/payment/verify`,
-        metadata: {
-          user_id: userId,
+        name: user.name || undefined,
+        userId: effectiveUserId,
+        customFields: {
           plan_type: 'premium_monthly'
         }
       });
 
       res.json({
-        authorization_url: transaction.authorization_url,
-        reference: transaction.reference,
-        access_code: transaction.access_code
+        checkout_url: checkout.checkoutUrl,
+        checkout_id: checkout.checkoutId
       });
     } catch (error) {
-      console.error('Payment initialization failed:', error);
-      res.status(500).json({ message: 'Payment initialization failed' });
+      console.error('Lemon Squeezy checkout creation failed:', error);
+      res.status(500).json({ message: 'Failed to create checkout session' });
     }
   });
 
-  app.get('/api/payment/verify', async (req, res) => {
+  // Lemon Squeezy webhook endpoint
+  app.post('/api/payment/lemonsqueezy/webhook', async (req, res) => {
     try {
-      const { reference } = req.query;
-      if (!reference) {
-        return res.status(400).json({ message: 'Missing reference' });
+      const signature = req.headers['x-signature'] as string;
+      const payload = JSON.stringify(req.body);
+
+      // Verify webhook signature
+      if (!lemonSqueezyService.verifyWebhookSignature(payload, signature)) {
+        console.error('Invalid Lemon Squeezy webhook signature');
+        return res.status(400).json({ message: 'Invalid signature' });
       }
 
-      // Verify transaction with Paystack
-      const transaction = await paystackService.verifyTransaction(reference as string);
-      
-      if (transaction.status === 'success') {
-        const userId = transaction.metadata?.user_id;
-        const amount = transaction.amount / 100; // Convert from kobo to Naira
-        
-        if (userId) {
-          // Update user to premium
-          await db.updateUser(userId, { 
-            is_premium: true, 
-            subscription_status: 'active',
-            paystack_customer_id: transaction.customer.id.toString(),
-            paystack_customer_code: transaction.customer.customer_code
-          });
+      const event = req.body;
+      console.log('Lemon Squeezy webhook received:', event.meta.event_name);
 
-          // Create subscription record
-          const subscriptionData = {
-            user_id: userId,
-            paystack_subscription_id: transaction.id.toString(),
-            paystack_authorization_code: transaction.authorization.authorization_code,
-            status: 'active',
-            plan_type: 'premium_monthly',
-            current_period_start: new Date(),
-            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-            amount: transaction.amount,
-            currency: transaction.currency
-          };
-
-          await db.createSubscription(subscriptionData);
-        }
-
-        // Redirect to success page
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/success?reference=${reference}`);
-      } else {
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/failed?reference=${reference}`);
+      switch (event.meta.event_name) {
+        case 'order_created':
+          // Handle successful payment
+          await handleOrderCreated(event.data);
+          break;
+          
+        case 'subscription_created':
+          // Handle subscription creation
+          await handleSubscriptionCreated(event.data);
+          break;
+          
+        case 'subscription_updated':
+          // Handle subscription updates (renewal, cancellation, etc.)
+          await handleSubscriptionUpdated(event.data);
+          break;
+          
+        case 'subscription_cancelled':
+          // Handle subscription cancellation
+          await handleSubscriptionCancelled(event.data);
+          break;
+          
+        default:
+          console.log('Unhandled Lemon Squeezy webhook event:', event.meta.event_name);
       }
+
+      res.status(200).json({ message: 'Webhook processed successfully' });
     } catch (error) {
-      console.error('Payment verification failed:', error);
-      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/failed`);
+      console.error('Lemon Squeezy webhook processing failed:', error);
+      res.status(500).json({ message: 'Webhook processing failed' });
     }
   });
+
+  // Helper functions for webhook processing
+  async function handleOrderCreated(orderData: any) {
+    try {
+      const userId = orderData.attributes.custom?.user_id;
+      if (!userId) {
+        console.error('No user_id in order custom data');
+        return;
+      }
+
+      // Update user to premium
+      await db.updateUser(userId, {
+        is_premium: true,
+        subscription_status: 'active',
+        lemonsqueezy_customer_id: orderData.attributes.customer_id?.toString()
+      });
+
+      console.log('User upgraded to premium:', userId);
+    } catch (error) {
+      console.error('Error handling order created:', error);
+    }
+  }
+
+  async function handleSubscriptionCreated(subscriptionData: any) {
+    try {
+      const userId = subscriptionData.attributes.custom?.user_id;
+      if (!userId) {
+        console.error('No user_id in subscription custom data');
+        return;
+      }
+
+      // Create subscription record
+      const subscriptionRecord = {
+        user_id: userId,
+        lemonsqueezy_subscription_id: subscriptionData.id,
+        lemonsqueezy_order_id: subscriptionData.attributes.order_id?.toString(),
+        lemonsqueezy_product_id: subscriptionData.attributes.product_id?.toString(),
+        lemonsqueezy_variant_id: subscriptionData.attributes.variant_id?.toString(),
+        status: subscriptionData.attributes.status,
+        plan_type: 'premium_monthly',
+        current_period_start: new Date(subscriptionData.attributes.created_at),
+        current_period_end: new Date(subscriptionData.attributes.renews_at),
+        amount: Math.round(subscriptionData.attributes.total_usd * 100), // Convert to cents
+        currency: 'USD'
+      };
+
+      await db.createSubscription(subscriptionRecord);
+
+      // Update user subscription info
+      await db.updateUser(userId, {
+        lemonsqueezy_subscription_id: subscriptionData.id,
+        subscription_end_date: new Date(subscriptionData.attributes.renews_at)
+      });
+
+      console.log('Subscription created for user:', userId);
+    } catch (error) {
+      console.error('Error handling subscription created:', error);
+    }
+  }
+
+  async function handleSubscriptionUpdated(subscriptionData: any) {
+    try {
+      const subscriptionId = subscriptionData.id;
+      const status = subscriptionData.attributes.status;
+      const renewsAt = subscriptionData.attributes.renews_at;
+      const endsAt = subscriptionData.attributes.ends_at;
+
+      // Find user by subscription ID
+      const user = await db.getUserByLemonSqueezySubscription(subscriptionId);
+      if (!user) {
+        console.error('User not found for subscription:', subscriptionId);
+        return;
+      }
+
+      // Update subscription status
+      const isActive = ['active', 'on_trial'].includes(status);
+      await db.updateUser(user.id, {
+        is_premium: isActive,
+        subscription_status: isActive ? 'active' : status,
+        subscription_end_date: endsAt ? new Date(endsAt) : (renewsAt ? new Date(renewsAt) : null)
+      });
+
+      console.log('Subscription updated for user:', user.id, 'Status:', status);
+    } catch (error) {
+      console.error('Error handling subscription updated:', error);
+    }
+  }
+
+  async function handleSubscriptionCancelled(subscriptionData: any) {
+    try {
+      const subscriptionId = subscriptionData.id;
+      
+      // Find user by subscription ID
+      const user = await db.getUserByLemonSqueezySubscription(subscriptionId);
+      if (!user) {
+        console.error('User not found for subscription:', subscriptionId);
+        return;
+      }
+
+      // Update user to non-premium (but keep access until end date)
+      const endsAt = subscriptionData.attributes.ends_at;
+      await db.updateUser(user.id, {
+        subscription_status: 'cancelled',
+        subscription_end_date: endsAt ? new Date(endsAt) : null
+      });
+
+      // If the subscription has already ended, remove premium access
+      if (endsAt && new Date(endsAt) <= new Date()) {
+        await db.updateUser(user.id, {
+          is_premium: false
+        });
+      }
+
+      console.log('Subscription cancelled for user:', user.id);
+    } catch (error) {
+      console.error('Error handling subscription cancelled:', error);
+    }
+  }
 
   // Get subscription status
   app.get('/api/subscription/status', optionalAuth, handleDemoUser, async (req, res) => {
@@ -1033,9 +1338,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const user = await db.getUser(userId);
         if (user && !user.is_premium) {
           const stories = await db.getUserStories(userId);
-          if (stories.length >= 2) {
+          if (stories.length >= 10) {
             return res.status(403).json({
-              message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
+              message: 'Free users are limited to 10 stories. Upgrade to premium for unlimited stories!',
               code: 'LIMIT_REACHED'
             });
           }
@@ -1157,9 +1462,9 @@ PDF Content: "${pdfText}"`;
         const user = await db.getUser(userId);
         if (user && !user.is_premium) {
           const stories = await db.getUserStories(userId);
-          if (stories.length >= 2) {
+          if (stories.length >= 10) {
             return res.status(403).json({
-              message: 'Free users are limited to 2 stories. Upgrade to premium for unlimited stories!',
+              message: 'Free users are limited to 10 stories. Upgrade to premium for unlimited stories!',
               code: 'LIMIT_REACHED'
             });
           }

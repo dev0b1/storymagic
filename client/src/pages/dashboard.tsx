@@ -1,38 +1,71 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { MagicSparkles } from '@/components/ui/magic-sparkles';
-import { WhimsicalBackground, getStoryTheme } from '@/components/ui/whimsical-backgrounds';
-
-import { NarrationModeCard, NARRATION_MODES } from '@/components/narration-mode-card';
-import { StoryReader } from '@/components/story-reader';
-import { ProFeatures } from '@/components/pro-features';
-import { LogOut, Plus, Sparkles, FileText, Settings, Crown, Volume2, Download, Star } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { authService, type User } from '@/lib/auth';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { storyService } from '@/lib/openrouter';
 import type { Story } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
+import { lemonSqueezyService } from '@/lib/lemonsqueezy';
 
-import { Link, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { safeNavigate } from '@/lib/navigation';
+
+// Chat components
+import { ChatHeader } from '@/components/chat/ChatHeader';
+import { ChatInput } from '@/components/chat/ChatInput';
+import { UserMessage } from '@/components/chat/UserMessage';
+import { SystemMessage } from '@/components/chat/SystemMessage';
+import { RecentStoriesModal } from '@/components/chat/RecentStoriesModal';
+import { SettingsModal } from '@/components/chat/SettingsModal';
+import { ProFeatures } from '@/components/pro-features';
+import { NARRATION_MODES } from '@/components/narration-mode-card';
+
+// Chat message type
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'system';
+  content: string;
+  timestamp: Date;
+  storyId?: string;
+  narrationMode?: string;
+  audioUrl?: string;
+  contentType?: string;
+  source?: string;
+  isPdf?: boolean;
+  isGenerating?: boolean;
+  isError?: boolean;
+}
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [inputText, setInputText] = useState('');
-  const [generatedStory, setGeneratedStory] = useState('');
-  const [currentStoryId, setCurrentStoryId] = useState<string | null>(null);
-  const [selectedNarrationMode, setSelectedNarrationMode] = useState<'focus' | 'balanced' | 'engaging' | 'doc_theatre'>('balanced');
-  const [isStoryPlaying, setIsStoryPlaying] = useState(false);
-  const [storyContentType, setStoryContentType] = useState<string>('general');
-  const [storySource, setStorySource] = useState<string>('text');
+  const [selectedNarrationMode, setSelectedNarrationMode] = useState<'focus' | 'engaging' | 'doc_theatre'>('engaging'); // Default to Narration
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [showRecentModal, setShowRecentModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showProFeatures, setShowProFeatures] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [showProFeatures, setShowProFeatures] = useState(false);
+
+  // Helper to init Lemon Squeezy checkout flow
+  const initLemonSqueezyCheckout = async () => {
+    try {
+      const current = await authService.getCurrentUser();
+      const email = current?.email || localStorage.getItem('userEmail') || 'demo@promptbook.app';
+      const userId = current?.id || 'demo';
+      
+      const { checkoutUrl } = await lemonSqueezyService.createCheckout(email, userId);
+      lemonSqueezyService.redirectToCheckout(checkoutUrl);
+    } catch (e) {
+      console.error('Lemon Squeezy checkout failed:', e);
+      toast({ 
+        title: 'Payment failed', 
+        description: 'Could not start checkout. Please try again later.',
+        variant: 'destructive'
+      });
+    }
+  };
 
   // Check auth state
   useEffect(() => {
@@ -88,12 +121,13 @@ export default function Dashboard() {
     queryKey: ['/api/stories'],
     enabled: !!user,
     retry: false,
-    staleTime: 0, // Always refetch to get latest stories
+    staleTime: 0,
     queryFn: async () => {
       const headers: Record<string, string> = { 'x-user-id': user!.id };
       if (localStorage.getItem('demo_user') === 'true') {
         headers['x-demo-user'] = 'true';
-      } else if (isSupabaseConfigured) {
+      } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
+        const { supabase } = await import('@/lib/supabase');
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -102,21 +136,39 @@ export default function Dashboard() {
       }
       const response = await fetch('/api/stories', { headers });
       if (!response.ok) throw new Error('Failed to fetch stories');
-      const storiesData = await response.json();
-      
-      // Update stories state if we have new data
-      if (storiesData.length > 0 && !generatedStory) {
-        const latestStory = storiesData[0];
-        setGeneratedStory(latestStory.output_story);
-        setCurrentStoryId(latestStory.id);
-        setSelectedNarrationMode(latestStory.narration_mode as 'focus' | 'balanced' | 'engaging');
-        setStoryContentType(latestStory.content_type || 'general');
-        setStorySource(latestStory.source || 'text');
-      }
-      
-      return storiesData;
+      return response.json();
     }
   });
+
+  // Convert stories to chat messages when they load
+  useEffect(() => {
+    if (stories.length > 0 && chatMessages.length === 0) {
+      const messages: ChatMessage[] = [];
+      stories.forEach(story => {
+        // Add user message
+        messages.push({
+          id: `user-${story.id}`,
+          type: 'user',
+          content: story.input_text,
+          timestamp: new Date(story.created_at),
+          isPdf: story.source === 'pdf'
+        });
+        
+        // Add system response
+        messages.push({
+          id: `system-${story.id}`,
+          type: 'system',
+          content: story.output_story,
+          timestamp: new Date(story.created_at),
+          storyId: story.id,
+          narrationMode: story.narration_mode,
+          contentType: story.content_type || 'general',
+          source: story.source || 'text'
+        });
+      });
+      setChatMessages(messages.reverse()); // Show newest first
+    }
+  }, [stories, chatMessages.length]);
 
   // Story generation mutation
   const generateStoryMutation = useMutation({
@@ -135,7 +187,8 @@ export default function Dashboard() {
       };
       if (localStorage.getItem('demo_user') === 'true') {
         headers['x-demo-user'] = 'true';
-      } else if (isSupabaseConfigured) {
+      } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
+        const { supabase } = await import('@/lib/supabase');
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -160,460 +213,376 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: (data) => {
-      console.log('Story generation response:', data); // Debug log
-      setGeneratedStory(data.story);
-      setCurrentStoryId(data.storyId || data.id); // Try both possible ID fields
-      setIsStoryPlaying(false); // Reset playing state when new story is generated
+      console.log('Story generation success data:', data);
       
-      // Set content type and source for display
-      setStoryContentType(data.contentType || 'general');
-      setStorySource(data.source || 'text');
+      // Replace generating message with actual result
+      const systemMessage: ChatMessage = {
+        id: `system-${data.storyId || Date.now()}`,
+        type: 'system',
+        content: data.story,
+        timestamp: new Date(),
+        storyId: data.storyId || data.id,
+        narrationMode: selectedNarrationMode,
+        contentType: data.contentType || 'general',
+        source: data.source || 'text',
+        audioUrl: data.audioUrl // Add audio URL if available
+      };
       
-      // Refetch stories to update the list
-        refetchStories();
+      // Replace the generating message
+      setChatMessages(prev => {
+        console.log('Current messages before update:', prev);
+        const updated = prev.map(msg => {
+          if (msg.isGenerating) {
+            console.log('Replacing generating message:', msg.id, 'with:', systemMessage.id);
+            return systemMessage;
+          }
+          return msg;
+        });
+        console.log('Updated messages:', updated);
+        return updated;
+      });
       
-      const contentType = data.contentType || 'general';
-      const source = data.source || 'text';
+      setInputText(''); // Clear input
+      setAttachedFile(null); // Clear attached file
+      refetchStories();
       
       toast({
-        title: "Story Generated! ✨",
-        description: `Your ${data.narrationMode} ${source === 'pdf' ? 'PDF story' : 'story'} is ready (${contentType} mode).`,
+        title: 'Audio Content Created! ✨',
+        description: `Your ${NARRATION_MODES.find(m => m.id === selectedNarrationMode)?.name.toLowerCase()} audio is ready.`,
       });
     },
     onError: (error) => {
       console.error('Story generation error:', error);
+      
+      // Replace generating message with error
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        type: 'system',
+        content: (error as Error).message || 'Something went wrong. Please try again.',
+        timestamp: new Date(),
+        narrationMode: selectedNarrationMode,
+        isError: true
+      };
+      
+      setChatMessages(prev => {
+        console.log('Replacing generating message with error');
+        return prev.map(msg => msg.isGenerating ? errorMessage : msg);
+      });
+      
       toast({
-        title: "Generation Failed",
-        description: error.message || "Something went wrong. Please try again.",
-        variant: "destructive"
+        title: 'Generation Failed',
+        description: (error as Error).message || 'Something went wrong. Please try again.',
+        variant: 'destructive'
       });
     }
   });
 
-  const handleGenerateStory = () => {
+  
+  const handleFileUpload = (file: File) => {
     if (!user) return;
     
-    generateStoryMutation.mutate({
-      text: inputText,
-      narrationMode: selectedNarrationMode,
-      userId: user.id
+    const maxSize = userDetails?.is_premium ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: 'File too large',
+        description: `Maximum file size is ${userDetails?.is_premium ? '20MB' : '5MB'}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setAttachedFile(file);
+    
+    toast({
+      title: 'PDF attached',
+      description: `${file.name} is ready for processing.`,
     });
+  };
+  
+  const handleRemoveFile = () => {
+    setAttachedFile(null);
+  };
+  
+  const handleSubmit = async () => {
+    if (!user) return;
+    
+    const hasContent = inputText.trim() || attachedFile;
+    if (!hasContent) return;
+    
+    // Add user message(s) to chat
+    const messages: ChatMessage[] = [];
+    
+    if (attachedFile) {
+      messages.push({
+        id: `user-${Date.now()}`,
+        type: 'user',
+        content: `📄 ${attachedFile.name}${inputText ? `\n\n${inputText}` : ''}`,
+        timestamp: new Date(),
+        isPdf: true
+      });
+    } else {
+      messages.push({
+        id: `user-${Date.now()}`,
+        type: 'user',
+        content: inputText,
+        timestamp: new Date()
+      });
+    }
+    
+    // Add generating system message
+    const generatingMessage: ChatMessage = {
+      id: `generating-${Date.now()}`,
+      type: 'system',
+      content: attachedFile 
+        ? `Processing your PDF${inputText ? ' with instructions' : ''} and generating audio content...`
+        : 'Generating your audio content...',
+      timestamp: new Date(),
+      narrationMode: selectedNarrationMode,
+      isGenerating: true
+    };
+    
+    setChatMessages(prev => [...prev, ...messages, generatingMessage]);
+    
+    try {
+      if (attachedFile) {
+        // Handle PDF upload
+        const formData = new FormData();
+        formData.append('pdf', attachedFile);
+        formData.append('narrationMode', selectedNarrationMode);
+        if (inputText) {
+          formData.append('instructions', inputText);
+        }
+        
+        const headers: Record<string, string> = { 'x-user-id': user.id };
+        if (localStorage.getItem('demo_user') === 'true') {
+          headers['x-demo-user'] = 'true';
+        } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
+          const { supabase } = await import('@/lib/supabase');
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`;
+            if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
+          }
+        }
+        
+        const response = await fetch('/api/upload-pdf', {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to process PDF');
+        }
+        
+        const result = await response.json();
+        
+        // Replace generating message with actual result
+        const systemMessage: ChatMessage = {
+          id: `system-${result.storyId}`,
+          type: 'system',
+          content: result.story,
+          timestamp: new Date(),
+          storyId: result.storyId,
+          narrationMode: selectedNarrationMode,
+          contentType: result.contentType || 'general',
+          source: 'pdf'
+        };
+        
+        setChatMessages(prev => prev.map(msg => 
+          msg.id === generatingMessage.id ? systemMessage : msg
+        ));
+        
+        setInputText('');
+        setAttachedFile(null);
+        refetchStories();
+        
+        toast({
+          title: 'PDF processed successfully!',
+          description: `Generated your audio from ${result.extractedTextLength} characters.`,
+        });
+      } else {
+        // Handle text generation
+        generateStoryMutation.mutate({
+          text: inputText,
+          narrationMode: selectedNarrationMode,
+          userId: user.id
+        });
+      }
+    } catch (error) {
+      // Replace generating message with error
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        type: 'system',
+        content: error instanceof Error ? error.message : 'Processing failed. Please try again.',
+        timestamp: new Date(),
+        narrationMode: selectedNarrationMode,
+        isError: true
+      };
+      
+      setChatMessages(prev => prev.map(msg => 
+        msg.id === generatingMessage.id ? errorMessage : msg
+      ));
+      
+      toast({
+        title: attachedFile ? 'PDF processing failed' : 'Generation failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleSelectStory = (story: Story) => {
+    // Find existing messages for this story or add them
+    const hasStory = chatMessages.some(msg => msg.storyId === story.id);
+    if (!hasStory) {
+      const userMessage: ChatMessage = {
+        id: `user-${story.id}`,
+        type: 'user',
+        content: story.input_text,
+        timestamp: new Date(story.created_at),
+        isPdf: story.source === 'pdf'
+      };
+      
+      const systemMessage: ChatMessage = {
+        id: `system-${story.id}`,
+        type: 'system',
+        content: story.output_story,
+        timestamp: new Date(story.created_at),
+        storyId: story.id,
+        narrationMode: story.narration_mode,
+        contentType: story.content_type || 'general',
+        source: story.source || 'text'
+      };
+      
+      setChatMessages(prev => [...prev, userMessage, systemMessage]);
+    }
   };
 
   const handleSignOut = async () => {
     try {
+      console.log('Starting sign out process...');
+      
+      // Clear user state immediately to prevent UI issues
+      setUser(null);
+      
+      // Clear any cached data
+      queryClient.clear();
+      
+      // Call auth service to sign out
       await authService.signOut();
-  safeNavigate(setLocation, '/auth');
+      
+      // Force navigate to auth page
+      console.log('Navigating to auth page...');
+      window.location.href = '/auth';
     } catch (error) {
       console.error('Sign out error:', error);
+      // Force redirect even if there's an error
+      window.location.href = '/auth';
     }
-  };
-
-  const getNarrationModeBorderColor = (storyMode: string) => {
-    switch (storyMode) {
-      case 'focus': return 'border-l-blue-400';
-      case 'balanced': return 'border-l-purple-400';
-      case 'engaging': return 'border-l-green-400';
-      default: return 'border-l-gray-400';
-    }
-  };
-
-  // Handle story playing state changes
-  const handleStoryPlayingChange = (playing: boolean) => {
-    setIsStoryPlaying(playing);
   };
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-200 via-pink-100 to-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
+  const remainingCredits = userDetails?.is_premium 
+    ? undefined 
+    : Math.max(0, 10 - (userDetails?.stories_generated || 0));
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-200 via-pink-100 to-white relative overflow-hidden">
-      <MagicSparkles />
-      <WhimsicalBackground 
-        storyTheme={generatedStory ? getStoryTheme(generatedStory) : 'default'} 
-        isActive={!!generatedStory}
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* Header */}
+      <ChatHeader
+        onSignOut={handleSignOut}
+        onUpgrade={initLemonSqueezyCheckout}
+        onShowRecent={() => setShowRecentModal(true)}
+        onShowSettings={() => setShowSettingsModal(true)}
+        isPremium={!!userDetails?.is_premium}
+        remainingCredits={remainingCredits}
+        totalGenerated={userDetails?.stories_generated || 0}
       />
-      
-      <div className="relative z-10 h-screen flex flex-col">
-        {/* Header - Compact */}
-        <div className="flex justify-between items-center px-6 py-3 bg-white/10 backdrop-blur-sm border-b border-white/20">
-          <div className="flex items-center space-x-3">
-            <Sparkles className="text-xl text-purple-600" />
-            <h1 className="font-magical text-2xl text-purple-800">Story Whirl</h1>
-            {userDetails?.is_premium && (
-              <Badge className="bg-gradient-to-r from-yellow-600 to-orange-600 text-white text-xs">
-                <Crown className="w-3 h-3 mr-1" />
-                Pro
-              </Badge>
-            )}
-            {/* Story Counter in Header */}
-            <div className="flex items-center space-x-2 bg-white/20 rounded-lg px-2 py-1">
-              <FileText className="h-3 w-3 text-purple-700" />
-              <span className="text-xs font-medium text-purple-700">
-                {userDetails?.stories_generated || 0}{!userDetails?.is_premium && "/2"}
-              </span>
-              {!userDetails?.is_premium && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-2 h-6 px-2 text-xs"
-                  onClick={async () => {
-                    try {
-                      const headers: Record<string, string> = {};
-                      if (localStorage.getItem('demo_user') === 'true') headers['x-user-id'] = 'demo@gmail.com';
-                      const res = await fetch('/api/upgrade', { method: 'POST', headers });
-                      if (!res.ok) throw new Error('Upgrade failed');
-                      await queryClient.invalidateQueries({ queryKey: ['/api/me'] });
-                    } catch (e) {
-                      console.error('Upgrade error:', e);
-                    }
-                  }}
-                >
-                  <Star className="w-3 h-3 mr-1" />
-                  Upgrade
-                </Button>
-              )}
+
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          {chatMessages.length === 0 ? (
+            <div className="text-center py-8 mb-4">
+              <p className="text-gray-600 text-sm">
+                Welcome! Create audio from text or PDFs below.
+              </p>
             </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Link href="/settings">
-              <Button variant="ghost" size="sm" className="text-xs px-2 py-1 text-purple-700 hover:bg-white/20">
-                <Settings className="w-3 h-3 mr-1" />
-                Settings
-              </Button>
-            </Link>
-            <Button 
-              onClick={handleSignOut}
-              variant="ghost" 
-              size="sm" 
-              className="text-xs px-2 py-1 text-purple-700 hover:bg-white/20"
-            >
-              <LogOut className="w-3 h-3 mr-1" />
-              Logout
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden">
-          <div className="h-full flex">
-            {/* Left Side - Input and History */}
-            <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
-
-
-
-            {/* Input Section */}
-            <Card className="bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center text-purple-800">
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Transform Your Text
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative">
-                  <Textarea
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder={`Paste your text, summary, or content here... 
-✨ Try pasting:
-• A book summary
-• A news article 
-• A Wikipedia page
-• Any text you want transformed!
-• Or upload a PDF above!
-
-${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 600 characters"}`}
-                    className="w-full h-32 p-4 border border-purple-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
-                    disabled={generateStoryMutation.isPending}
-                    data-testid="textarea-input"
+          ) : (
+            <div className="space-y-4">
+              {chatMessages.map((message) => (
+                message.type === 'user' ? (
+                  <UserMessage
+                    key={message.id}
+                    content={message.content}
+                    isPdf={message.isPdf}
+                    timestamp={message.timestamp}
                   />
-                  <div className={`absolute bottom-2 right-2 text-xs px-2 py-1 rounded-full ${
-                    inputText.length > (userDetails?.is_premium ? 20000 : 600) 
-                      ? 'bg-red-100 text-red-700' 
-                      : inputText.length > (userDetails?.is_premium ? 18000 : 500)
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {inputText.length}/{userDetails?.is_premium ? "20,000" : "600"}
-                  </div>
-                </div>
-                
-                {/* PDF Upload Button */}
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => document.getElementById('pdf-upload')?.click()}
-                    className="border-purple-200 text-purple-700 hover:bg-purple-50"
-                    disabled={generateStoryMutation.isPending}
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Upload PDF
-                  </Button>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // Check file size limits
-                        const maxSize = userDetails?.is_premium ? 20 * 1024 * 1024 : 5 * 1024 * 1024; // 20MB for premium, 5MB for free
-                        if (file.size > maxSize) {
-                          toast({
-                            title: "File too large",
-                            description: `Maximum file size is ${userDetails?.is_premium ? '20MB' : '5MB'} for ${userDetails?.is_premium ? 'premium' : 'free'} users.`,
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-
-                        // Create FormData for file upload
-                        const formData = new FormData();
-                        formData.append('pdf', file);
-                        formData.append('narrationMode', selectedNarrationMode);
-
-                        try {
-                          const headers: Record<string, string> = { 'x-user-id': user?.id || 'demo' };
-                          if (localStorage.getItem('demo_user') === 'true') {
-                            headers['x-demo-user'] = 'true';
-                          } else if (isSupabaseConfigured) {
-                            const { data: { session } } = await supabase.auth.getSession();
-                            if (session?.access_token) {
-                              headers['Authorization'] = `Bearer ${session.access_token}`;
-                              if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
-                            }
-                          }
-                          const response = await fetch('/api/upload-pdf', {
-                            method: 'POST',
-                            headers,
-                            body: formData
-                          });
-
-                          if (!response.ok) {
-                            const error = await response.json();
-                            throw new Error(error.message || 'Failed to process PDF');
-                          }
-
-                          const result = await response.json();
-                          
-                          // Update state with generated story
-                          setGeneratedStory(result.story);
-                          setCurrentStoryId(result.storyId);
-                          setStoryContentType(result.contentType || 'general');
-                          setStorySource('pdf');
-                          setIsStoryPlaying(false);
-
-                          toast({
-                            title: "PDF processed successfully!",
-                            description: `Extracted ${result.extractedTextLength} characters and generated your story.`,
-                          });
-                        } catch (error) {
-                          console.error('PDF processing error:', error);
-                          toast({
-                            title: "PDF processing failed",
-                            description: error instanceof Error ? error.message : "Please try uploading a different PDF or paste text manually.",
-                            variant: "destructive",
-                          });
-                        }
-                      }
-                    }}
-                    className="hidden"
-                    id="pdf-upload"
-                  />
-                  <span className="text-xs text-gray-500">
-                    {userDetails?.is_premium ? "Premium: Up to 20MB" : "Free: Up to 5MB"}
-                  </span>
-                </div>
-                
-                {/* Narration Mode Selection */}
-                <div>
-                  <h4 className="font-semibold text-gray-800 mb-3">Choose Narration Mode:</h4>
-                  <div className="grid grid-cols-4 gap-3">
-                    {NARRATION_MODES.map((mode) => (
-                      <NarrationModeCard
-                        key={mode.id}
-                        mode={mode}
-                        selected={selectedNarrationMode === mode.id}
-                        onSelect={setSelectedNarrationMode}
-                      />
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Stories Remaining and Generate Button */}
-                <div className="space-y-3">
-                  {userDetails && !userDetails.is_premium && (
-                    <div className="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                      <span className="text-sm text-purple-700">
-                        Stories remaining: <strong>{Math.max(0, 2 - (userDetails.stories_generated || 0))}</strong> of 2
-                      </span>
-                      <Button
-                        size="sm"
-                        className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300"
-                      >
-                        <Crown className="w-3 h-3 mr-1" />
-                        Upgrade Pro
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <Button
-                    onClick={handleGenerateStory}
-                    disabled={
-                      generateStoryMutation.isPending || 
-                      !inputText.trim() || 
-                      inputText.length > (userDetails?.is_premium ? 20000 : 600) ||
-                      (userDetails && !userDetails.is_premium && (userDetails.stories_generated || 0) >= 2)
-                    }
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    data-testid="button-generate-story"
-                  >
-                    {generateStoryMutation.isPending ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Weaving Magic...
-                      </div>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Generate Story
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recent Stories Section */}
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center text-purple-800">
-                  <FileText className="w-5 h-5 mr-2" />
-                  Latest Stories
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stories.length > 0 ? (
-                  <div className="grid gap-3">
-                    {stories.slice(0, 3).map((story) => (
-                      <div
-                        key={story.id}
-                        className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-all duration-300 hover:scale-[1.02]"
-                        onClick={() => {
-                          setGeneratedStory(story.output_story);
-                          setSelectedNarrationMode(story.narration_mode as 'focus' | 'balanced' | 'engaging');
-                          setCurrentStoryId(story.id);
-                          setIsStoryPlaying(false); // Reset playing state when selecting a story
-                          setStoryContentType(story.content_type || 'general'); // Use story's content type
-                          setStorySource(story.source || 'text'); // Use story's source
-                        }}
-                      >
-                        <div className={`border-l-4 pl-3 ${getNarrationModeBorderColor(story.narration_mode)}`}>
-                          <p className="text-sm font-medium text-gray-800 mb-1">
-                            {NARRATION_MODES.find(m => m.id === story.narration_mode)?.name || 'Unknown'}
-                          </p>
-                          <p className="text-xs text-gray-600 line-clamp-2">
-                            {story.input_text.slice(0, 100)}...
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 ) : (
-                  <p className="text-center text-gray-500 py-4">No stories yet! Generate your first magical tale above.</p>
-                )}
-              </CardContent>
-            </Card>
-
+                  <SystemMessage
+                    key={message.id}
+                    title={`${message.narrationMode?.charAt(0).toUpperCase()}${message.narrationMode?.slice(1)} Audio Content`}
+                    content={message.content}
+                    narrationMode={message.narrationMode || 'focus'}
+                    audioUrl={message.audioUrl}
+                    storyId={message.storyId}
+                    timestamp={message.timestamp}
+                    contentType={message.contentType}
+                    source={message.source}
+                    isGenerating={message.isGenerating}
+                    isError={message.isError}
+                  />
+                )
+              ))}
             </div>
-
-            {/* Right Side - Story Display */}
-            <div className="w-1/2 p-6 overflow-y-auto">
-              {generatedStory ? (
-                <Card className="bg-white">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center text-purple-800">
-                      <Sparkles className="w-5 h-5 mr-2" />
-                        Your Story
-                    </CardTitle>
-                      <div className="flex items-center gap-2">
-                        {storySource === 'pdf' && (
-                          <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
-                            PDF Source
-                          </Badge>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-purple-200 text-purple-700 hover:bg-purple-50"
-                          onClick={() => window.dispatchEvent(new Event('storymagic:generate-audio'))}
-                          data-testid="header-generate-audio"
-                        >
-                          <Volume2 className="w-4 h-4 mr-2" />
-                          Generate Audio
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-200 text-gray-700 hover:bg-gray-50"
-                          onClick={() => window.dispatchEvent(new Event('storymagic:download-audio'))}
-                          data-testid="header-download-audio"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <StoryReader 
-                      story={generatedStory}
-                      narrationMode={selectedNarrationMode}
-                      storyId={currentStoryId || undefined}
-                      userId={user?.id}
-                      usedFallback={false}
-                      onPlayingChange={handleStoryPlayingChange}
-                      isGenerating={generateStoryMutation.isPending}
-                      contentType={storyContentType}
-                      source={storySource}
-                    />
-                    
-                    <Button
-                      onClick={() => {
-                        setInputText('');
-                        setGeneratedStory('');
-                        setCurrentStoryId(null);
-                        setIsStoryPlaying(false);
-                        setStoryContentType('general');
-                        setStorySource('text');
-                      }}
-                      className="w-full mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3 font-semibold transition-all duration-300 hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Generate Another Story
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="bg-white h-full flex items-center justify-center">
-                  <CardContent className="text-center">
-                    <div className="text-6xl mb-4">✨</div>
-                    <h3 className="font-magical text-2xl text-purple-800 mb-2">Ready for Magic?</h3>
-                    <p className="text-gray-600">Enter your text and choose a storyteller to begin your magical transformation!</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Chat Input */}
+      <ChatInput
+        inputText={inputText}
+        onInputChange={setInputText}
+        onSubmit={handleSubmit}
+        onFileUpload={handleFileUpload}
+        selectedNarrationMode={selectedNarrationMode}
+        onNarrationModeChange={setSelectedNarrationMode}
+        isGenerating={generateStoryMutation.isPending}
+        maxLength={userDetails?.is_premium ? 20000 : 600}
+        maxFileSize={userDetails?.is_premium ? '20MB' : '5MB'}
+        remainingCredits={remainingCredits}
+        isPremium={!!userDetails?.is_premium}
+        attachedFile={attachedFile}
+        onRemoveFile={handleRemoveFile}
+      />
+
+      {/* Recent Stories Modal */}
+      <RecentStoriesModal
+        isOpen={showRecentModal}
+        onClose={() => setShowRecentModal(false)}
+        stories={stories}
+        onSelectStory={handleSelectStory}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        onUpgrade={initLemonSqueezyCheckout}
+        userEmail={user?.email || 'demo@gmail.com'}
+        isPremium={!!userDetails?.is_premium}
+        storiesGenerated={userDetails?.stories_generated || 0}
+      />
+
       {/* ProFeatures Modal */}
       {showProFeatures && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -621,28 +590,15 @@ ${userDetails?.is_premium ? "Premium: Up to 20,000 characters" : "Free: Up to 60
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Premium Features</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   onClick={() => setShowProFeatures(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 text-xl"
                 >
                   ✕
-                </Button>
+                </button>
               </div>
               <ProFeatures 
-                onUpgrade={async () => {
-                  try {
-                    const headers: Record<string, string> = {};
-                    if (localStorage.getItem('demo_user') === 'true') headers['x-user-id'] = 'demo@gmail.com';
-                    const res = await fetch('/api/upgrade', { method: 'POST', headers });
-                    if (!res.ok) throw new Error('Upgrade failed');
-                    await queryClient.invalidateQueries({ queryKey: ['/api/me'] });
-                    setShowProFeatures(false);
-                  } catch (e) {
-                    console.error('Upgrade error:', e);
-                  }
-                }}
+                onUpgrade={initLemonSqueezyCheckout}
                 currentPlan={userDetails?.is_premium ? 'premium' : 'free'}
               />
             </div>

@@ -1,0 +1,6 @@
+PLACEHOLDER: overlap.mp3
+Description: Subtle audio cue for overlapping speech moments in conversations
+Suggested content: Soft background hum or gentle crossfade sound (0.3-0.8 seconds)
+Usage: Triggered by [SFX: overlap] cues when speakers talk simultaneously
+Recommended volume: -22dB to -18dB normalized (softer than interruptions)
+Format: MP3, 128kbps minimum

@@ -1,0 +1,6 @@
+PLACEHOLDER: transition.mp3
+Description: Audio cue for scene or topic transitions in podcast conversations
+Suggested content: Gentle swoosh, chime, or fade effect (1-2 seconds)
+Usage: Triggered by [SFX: transition] cues between conversation topics
+Recommended volume: -18dB to -15dB normalized
+Format: MP3, 128kbps minimum

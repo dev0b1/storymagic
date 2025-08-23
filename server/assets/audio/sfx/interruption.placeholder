@@ -1,0 +1,6 @@
+PLACEHOLDER: interruption.mp3
+Description: Brief audio cue for speaker interruptions in podcast-style conversations
+Suggested content: Quick "whoosh" or subtle "click" sound (0.2-0.5 seconds)
+Usage: Triggered by [SFX: interruption] cues in doc_theatre scripts
+Recommended volume: -20dB to -16dB normalized
+Format: MP3, 128kbps minimum

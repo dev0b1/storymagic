@@ -503,13 +503,15 @@ export const db = {
 
   async createSubscription(subData: {
     user_id: string;
-    paystack_subscription_id: string;
-    paystack_authorization_code?: string;
+    lemonsqueezy_subscription_id: string;
+    lemonsqueezy_order_id?: string;
+    lemonsqueezy_product_id?: string;
+    lemonsqueezy_variant_id?: string;
     status: string;
     plan_type: string;
     current_period_start: Date;
     current_period_end: Date;
-    amount: number; // in kobo
+    amount: number; // in cents (USD)
     currency: string;
   }): Promise<any> {
     if (!canUseSupabase) {
@@ -523,8 +525,10 @@ export const db = {
         .from('subscriptions')
         .insert([{
           user_id: subData.user_id,
-          paystack_subscription_id: subData.paystack_subscription_id,
-          paystack_authorization_code: subData.paystack_authorization_code,
+          lemonsqueezy_subscription_id: subData.lemonsqueezy_subscription_id,
+          lemonsqueezy_order_id: subData.lemonsqueezy_order_id,
+          lemonsqueezy_product_id: subData.lemonsqueezy_product_id,
+          lemonsqueezy_variant_id: subData.lemonsqueezy_variant_id,
           status: subData.status,
           plan_type: subData.plan_type,
           current_period_start: subData.current_period_start.toISOString(),
@@ -542,6 +546,46 @@ export const db = {
       const record = { id, ...subData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       fallbackStorage.subscriptions.set(id, record);
       return record;
+    }
+  },
+
+  async getUserByLemonSqueezySubscription(subscriptionId: string): Promise<User | null> {
+    if (!canUseSupabase) {
+      // Search through fallback users
+      for (const user of fallbackStorage.users.values()) {
+        if (user.lemonsqueezy_subscription_id === subscriptionId) {
+          return user;
+        }
+      }
+      return null;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('lemonsqueezy_subscription_id', subscriptionId)
+        .single();
+      
+      if (error || !data) {
+        // Search through fallback users
+        for (const user of fallbackStorage.users.values()) {
+          if (user.lemonsqueezy_subscription_id === subscriptionId) {
+            return user;
+          }
+        }
+        return null;
+      }
+      
+      return data as unknown as User;
+    } catch (error) {
+      console.error('Supabase connection failed, using fallback storage');
+      // Search through fallback users
+      for (const user of fallbackStorage.users.values()) {
+        if (user.lemonsqueezy_subscription_id === subscriptionId) {
+          return user;
+        }
+      }
+      return null;
     }
   }
 };
