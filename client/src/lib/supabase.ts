@@ -30,8 +30,13 @@ const mockClient = {
   })
 } as unknown as SupabaseClient;
 
-export const supabase = isSupabaseConfigured 
-  ? createClient(supabaseUrl!, supabaseAnonKey!)
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl!, supabaseAnonKey!, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    })
   : mockClient;
 
 export interface User {

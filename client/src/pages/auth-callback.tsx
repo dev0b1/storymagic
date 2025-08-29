@@ -25,17 +25,19 @@ export default function AuthCallback() {
         // First, try the SDK helper which consumes tokens from the URL
         // (supabase v2+ provides getSessionFromUrl which parses the fragment).
         try {
-          // @ts-ignore - method may not exist on older SDKs
-          const fromUrl = await (supabase.auth as any).getSessionFromUrl?.();
-          if (fromUrl && fromUrl.data && fromUrl.data.session) {
-            console.log('✅ Session parsed from URL via getSessionFromUrl');
-            setStatus('Login successful! Redirecting...');
-            // Clear URL after successful processing
-            window.history.replaceState({}, document.title, window.location.pathname);
-            const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-            sessionStorage.removeItem('redirectAfterAuth');
-            safeNavigate(setLocation, redirectPath);
-            return;
+          const authAny = supabase.auth as any;
+          if (typeof authAny.getSessionFromUrl === 'function') {
+            const fromUrl = await authAny.getSessionFromUrl();
+            if (fromUrl && fromUrl.data && fromUrl.data.session) {
+              console.log('✅ Session parsed from URL via getSessionFromUrl');
+              setStatus('Login successful! Redirecting...');
+              // Clear URL after successful processing
+              window.history.replaceState({}, document.title, window.location.pathname);
+              const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
+              sessionStorage.removeItem('redirectAfterAuth');
+              safeNavigate(setLocation, redirectPath);
+              return;
+            }
           }
         } catch (err) {
           console.debug('getSessionFromUrl not available or failed:', err);
@@ -43,25 +45,47 @@ export default function AuthCallback() {
 
         // If tokens are present in the hash, try to set the session manually.
         const hash = window.location.hash || '';
+        const waitForSession = async (timeoutMs = 3000, intervalMs = 150) => {
+          const start = Date.now();
+          while (Date.now() - start < timeoutMs) {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) return session;
+            } catch (e) {
+              // ignore and retry
+            }
+            await new Promise((r) => setTimeout(r, intervalMs));
+          }
+          return null;
+        };
+
         if (hash.includes('access_token')) {
           try {
             const params = Object.fromEntries(new URLSearchParams(hash.replace(/^#/, '')));
             if (params.access_token) {
-              // @ts-ignore - setSession exists on SDK
-              const { error: setErr } = await (supabase.auth as any).setSession?.({
-                access_token: params.access_token,
-                refresh_token: params.refresh_token
-              });
-              if (setErr) {
-                console.warn('setSession reported error:', setErr);
+              const authAny = supabase.auth as any;
+              if (typeof authAny.setSession === 'function') {
+                const { error: setErr } = await authAny.setSession({
+                  access_token: params.access_token,
+                  refresh_token: params.refresh_token,
+                });
+                if (setErr) {
+                  console.warn('setSession reported error:', setErr);
+                } else {
+                  console.log('✅ Session set from URL fragment');
+                  setStatus('Login successful! Redirecting...');
+                  // Wait for SDK/storage to reflect the session (polling)
+                  const s = await waitForSession(3000, 150);
+                  if (!s) console.warn('Timed out waiting for session to become available');
+                  window.history.replaceState({}, document.title, window.location.pathname);
+                  const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
+                  sessionStorage.removeItem('redirectAfterAuth');
+                  console.log('Navigating to', redirectPath);
+                  safeNavigate(setLocation, redirectPath);
+                  return;
+                }
               } else {
-                console.log('✅ Session set from URL fragment');
-                setStatus('Login successful! Redirecting...');
-                window.history.replaceState({}, document.title, window.location.pathname);
-                const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-                sessionStorage.removeItem('redirectAfterAuth');
-                safeNavigate(setLocation, redirectPath);
-                return;
+                console.warn('setSession is not available on the Supabase client');
               }
             }
           } catch (err) {
