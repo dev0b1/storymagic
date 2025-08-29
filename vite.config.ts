@@ -1,19 +1,12 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import fs from "fs"; // Add this import
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-export default defineConfig(async ({ command, mode }) => {  // Made the function async
-  // Load env files
+export default defineConfig(async ({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  
-  // Validate Supabase configuration
   const hasSupabase = !!(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY);
-  console.log('Vite Config - Supabase Status:', {
-    hasUrl: !!env.VITE_SUPABASE_URL,
-    hasKey: !!env.VITE_SUPABASE_ANON_KEY,
-    isConfigured: hasSupabase
-  });
 
   const cartographer = process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined
     ? [(await import("@replit/vite-plugin-cartographer")).cartographer()]
@@ -21,13 +14,13 @@ export default defineConfig(async ({ command, mode }) => {  // Made the function
 
   return {
     define: {
-      // Expose environment variables to the client
       'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
       'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY)
     },
     plugins: [
       react(),
       runtimeErrorOverlay(),
+      // Remove basicSsl() plugin
       ...cartographer,
     ],
     resolve: {
@@ -42,18 +35,44 @@ export default defineConfig(async ({ command, mode }) => {  // Made the function
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
     },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        '@supabase/supabase-js',
+        '@tanstack/react-query',
+        'wouter',
+        'lucide-react',
+        'clsx',
+        'tailwind-merge'
+      ],
+      exclude: ['@replit/vite-plugin-cartographer']
+    },
     server: {
+      host: 'localhost',
+      port: 5173,
+      strictPort: true,
+      https: {
+        key: fs.readFileSync('localhost-key.pem'), // Use mkcert key
+        cert: fs.readFileSync('localhost.pem')     // Use mkcert cert
+      },
       fs: {
         strict: true,
         deny: ["**/.*"],
       },
       proxy: {
-        '/api': {
+        '^/api/.*': {
           target: 'http://localhost:3000',
           changeOrigin: true,
           secure: false,
+          timeout: 10000,
+          proxyTimeout: 10000
         },
       },
+      hmr: {
+        port: 5173,
+        host: 'localhost'
+      }
     },
   };
 });

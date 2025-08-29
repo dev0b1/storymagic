@@ -129,12 +129,12 @@ export function StoryDisplay({ story, character, isGenerating = false, storyId }
 
     setIsGeneratingAudio(true);
     try {
+      const { buildAuthHeaders } = await import('@/lib/request-headers');
+      const headers = await buildAuthHeaders({ userId: localStorage.getItem('userId') || undefined });
+
       const response = await fetch(`/api/story/${storyId}/audio`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': localStorage.getItem('userId') || 'demo'
-        }
+        headers
       });
 
       if (!response.ok) {

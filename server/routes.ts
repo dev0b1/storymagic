@@ -991,6 +991,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             audioUrl = `data:audio/mpeg;base64,${finalBuffer.toString('base64')}`;
             provider = 'elevenlabs';
             console.log('✅ Audio generation complete with ElevenLabs');
+            
+            // Save audio URL to database
+            try {
+              await db.updateStory(story.id, {
+                audio_url: audioUrl,
+                audio_provider: provider
+              });
+              console.log('✅ Audio URL saved to database');
+            } catch (dbError) {
+              console.error('⚠️ Failed to save audio URL to database:', dbError);
+            }
           } else {
             console.log('❌ ElevenLabs request failed:', await elevenLabsResponse.text());
           }
@@ -1047,6 +1058,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           audioUrl = `data:audio/mp3;base64,${finalBuffer.toString('base64')}`;
           provider = 'openai';
+          
+          // Save audio URL to database
+          try {
+            await db.updateStory(story.id, {
+              audio_url: audioUrl,
+              audio_provider: provider
+            });
+            console.log('✅ Audio URL saved to database (OpenAI)');
+          } catch (dbError) {
+            console.error('⚠️ Failed to save audio URL to database:', dbError);
+          }
         } catch (error) {
           console.error('OpenAI TTS error:', error);
         }

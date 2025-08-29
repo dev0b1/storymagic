@@ -52,6 +52,8 @@ export interface Story {
   source: string;
   story_id?: string;
   used_fallback: boolean;
+  audio_url?: string;
+  audio_provider?: string;
   created_at: string;
   updated_at: string;
 }
@@ -449,6 +451,49 @@ export const db = {
     } catch (error) {
       console.error('Supabase connection failed, using fallback storage');
       return fallbackStorage.stories.get(storyId) || null;
+    }
+  },
+
+  async updateStory(storyId: string, updates: Partial<Story>): Promise<Story | null> {
+    if (!canUseSupabase) {
+      const story = fallbackStorage.stories.get(storyId);
+      if (story) {
+        const updatedStory = { ...story, ...updates, updated_at: new Date().toISOString() };
+        fallbackStorage.stories.set(storyId, updatedStory);
+        return updatedStory as Story;
+      }
+      return null;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('stories')
+        .update(updates)
+        .eq('id', storyId)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error updating story:', error);
+        // Fallback to in-memory storage
+        const story = fallbackStorage.stories.get(storyId);
+        if (story) {
+          const updatedStory = { ...story, ...updates, updated_at: new Date().toISOString() };
+          fallbackStorage.stories.set(storyId, updatedStory);
+          return updatedStory as Story;
+        }
+        return null;
+      }
+      
+      return data as unknown as Story;
+    } catch (error) {
+      console.error('Supabase connection failed, using fallback storage');
+      const story = fallbackStorage.stories.get(storyId);
+      if (story) {
+        const updatedStory = { ...story, ...updates, updated_at: new Date().toISOString() };
+        fallbackStorage.stories.set(storyId, updatedStory);
+        return updatedStory as Story;
+      }
+      return null;
     }
   },
 

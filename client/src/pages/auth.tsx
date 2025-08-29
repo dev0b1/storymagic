@@ -14,6 +14,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -26,6 +27,22 @@ export default function Auth() {
   }
 
   useEffect(() => {
+    // Check for error parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    
+    if (error) {
+      setErrorMessage(decodeURIComponent(error));
+      // Clear the error from URL to prevent it from persisting on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      toast({
+        title: "Authentication Error",
+        description: decodeURIComponent(error),
+        variant: "destructive"
+      });
+    }
+    
     // Check for existing session on mount
     const checkSession = async () => {
       const user = await authService.getCurrentUser();
@@ -34,7 +51,7 @@ export default function Auth() {
       }
     };
     checkSession();
-  }, [setLocation]);
+  }, [setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -24,7 +24,9 @@ interface SystemMessageProps {
   content: string;
   narrationMode: string;
   audioUrl?: string;
+  savedAudioProvider?: string;
   storyId?: string;
+  userId?: string;
   timestamp: Date;
   contentType?: string;
   source?: string;
@@ -39,7 +41,9 @@ export function SystemMessage({
   content, 
   narrationMode, 
   audioUrl, 
+  savedAudioProvider,
   storyId, 
+  userId,
   timestamp, 
   contentType = 'general',
   source = 'text',
@@ -127,16 +131,16 @@ export function SystemMessage({
 
   const generateAudio = async () => {
     if (!storyId) return;
-    
+
     try {
       setAudioState(prev => ({ ...prev, isGenerating: true, error: undefined }));
-      const user = await authService.getCurrentUser();
-      
+
+      const { buildAuthHeaders } = await import('@/lib/request-headers');
+      const headers = await buildAuthHeaders({ userId: userId || undefined });
+
       const response = await fetch(`/api/story/${storyId}/audio?withMusic=true`, {
         method: 'POST',
-        headers: {
-          'x-user-id': user?.id || 'anonymous'
-        }
+        headers
       });
       
       if (!response.ok) {

@@ -57,7 +57,18 @@ export const sessionManager = {
   },
 
   clearSession: () => {
-    store = { ...defaultState };
-    listeners.forEach(listener => listener(null));
+    console.log('SessionManager: Clearing session and resetting state');
+    store = { 
+      session: null,
+      initialized: false // Reset initialization state
+    };
+    // Notify all listeners that session is cleared
+    listeners.forEach(listener => {
+      try {
+        listener(null);
+      } catch (error) {
+        console.warn('SessionManager: Error notifying listener during clearSession:', error);
+      }
+    });
   },
 };

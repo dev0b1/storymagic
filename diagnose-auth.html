@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Diagnostics</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #f5f5f5; }
+        .test-section { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Authentication Diagnostics</h1>
+    
+    <div class="test-section">
+        <h2>⏰ Time Synchronization Test</h2>
+        <p>Local time: <span id="localTime"></span></p>
+        <p>UTC time: <span id="utcTime"></span></p>
+        <p>Timezone: <span id="timezone"></span></p>
+        <button onclick="checkTimeSync()">Test Time Sync with Server</button>
+        <div id="timeSyncResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🌐 Environment Test</h2>
+        <p>Origin: <span id="origin"></span></p>
+        <p>Protocol: <span id="protocol"></span></p>
+        <p>Host: <span id="host"></span></p>
+        <div id="envResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔗 URL Processing Test</h2>
+        <p>Test URL with hash fragments:</p>
+        <button onclick="testURLParsing()">Test URL Parsing</button>
+        <div id="urlParsingResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Browser Info</h2>
+        <p>User Agent: <span id="userAgent"></span></p>
+        <p>Cookies Enabled: <span id="cookiesEnabled"></span></p>
+        <p>Local Storage: <span id="localStorageEnabled"></span></p>
+    </div>
+
+    <script>
+        // Display basic info
+        document.getElementById('localTime').textContent = new Date().toString();
+        document.getElementById('utcTime').textContent = new Date().toISOString();
+        document.getElementById('timezone').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        document.getElementById('origin').textContent = window.location.origin;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('host').textContent = window.location.host;
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('cookiesEnabled').textContent = navigator.cookieEnabled ? 'Yes' : 'No';
+        
+        try {
+            localStorage.setItem('test', 'test');
+            localStorage.removeItem('test');
+            document.getElementById('localStorageEnabled').textContent = 'Yes';
+        } catch (e) {
+            document.getElementById('localStorageEnabled').textContent = 'No - ' + e.message;
+        }
+
+        async function checkTimeSync() {
+            const result = document.getElementById('timeSyncResult');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                const start = Date.now();
+                const response = await fetch('/api/health', { 
+                    method: 'HEAD',
+                    cache: 'no-cache'
+                });
+                const end = Date.now();
+                
+                const serverDate = response.headers.get('date');
+                const roundTripTime = end - start;
+                
+                if (serverDate) {
+                    const serverTime = new Date(serverDate).getTime();
+                    const localTime = Date.now();
+                    const timeDiff = Math.abs(localTime - serverTime);
+                    const timeDiffSeconds = Math.round(timeDiff / 1000);
+                    
+                    result.innerHTML = `
+                        <p class="${timeDiffSeconds > 60 ? 'error' : 'success'}">
+                            Time difference: ${timeDiffSeconds} seconds<br>
+                            Round trip time: ${roundTripTime}ms<br>
+                            Server time: ${new Date(serverTime).toISOString()}<br>
+                            Local time: ${new Date(localTime).toISOString()}
+                        </p>
+                        ${timeDiffSeconds > 60 ? '<p class="error">⚠️ Significant time difference detected! This could cause auth token expiration issues.</p>' : ''}
+                    `;
+                } else {
+                    result.innerHTML = '<p class="warning">Could not get server time</p>';
+                }
+            } catch (error) {
+                result.innerHTML = `<p class="error">Error testing time sync: ${error.message}</p>`;
+            }
+        }
+
+        function testURLParsing() {
+            const result = document.getElementById('urlParsingResult');
+            
+            // Test URLs similar to what Supabase sends
+            const testUrls = [
+                'http://localhost:5173/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+                'http://localhost:5173/auth/callback?code=abc123&state=xyz789',
+                'http://localhost:5173/auth/callback#access_token=abc123&expires_in=3600&token_type=bearer'
+            ];
+
+            let output = '<h4>URL Parsing Test Results:</h4>';
+            
+            testUrls.forEach((url, index) => {
+                const testUrl = new URL(url);
+                const searchParams = new URLSearchParams(testUrl.search);
+                const hashParams = new URLSearchParams(testUrl.hash.substring(1));
+                
+                output += `<div style="margin: 10px 0; padding: 10px; border: 1px solid #ccc;">
+                    <strong>Test URL ${index + 1}:</strong><br>
+                    <code style="font-size: 0.8em;">${url}</code><br>
+                    <strong>Search params:</strong> ${Array.from(searchParams.entries()).map(([k,v]) => `${k}=${v}`).join(', ') || 'none'}<br>
+                    <strong>Hash params:</strong> ${Array.from(hashParams.entries()).map(([k,v]) => `${k}=${v}`).join(', ') || 'none'}
+                </div>`;
+            });
+            
+            result.innerHTML = output;
+        }
+
+        // Auto-run time sync test on load
+        setTimeout(checkTimeSync, 1000);
+    </script>
+</body>
+</html>

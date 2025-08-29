@@ -15,9 +15,11 @@ interface StoryReaderProps {
   isGenerating?: boolean;
   contentType?: string;
   source?: string;
+  savedAudioUrl?: string;
+  savedAudioProvider?: string;
 }
 
-export function StoryReader({ story, narrationMode, storyId, userId, usedFallback, onPlayingChange, isGenerating = false, contentType, source }: StoryReaderProps) {
+export function StoryReader({ story, narrationMode, storyId, userId, usedFallback, onPlayingChange, isGenerating = false, contentType, source, savedAudioUrl, savedAudioProvider }: StoryReaderProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentParagraph, setCurrentParagraph] = useState(0);
@@ -287,6 +289,20 @@ export function StoryReader({ story, narrationMode, storyId, userId, usedFallbac
     setBackgroundAudioEnabled(!backgroundAudioEnabled);
     toast({ title: backgroundAudioEnabled ? 'Ambient audio disabled' : 'Ambient audio enabled', description: backgroundAudioEnabled ? 'Background music turned off' : 'Background music turned on' });
   };
+
+  // Load saved audio from database when component mounts
+  useEffect(() => {
+    if (savedAudioUrl && savedAudioProvider) {
+      console.log('📱 Loading saved audio:', { savedAudioUrl: savedAudioUrl.substring(0, 50), savedAudioProvider });
+      setAudioUrl(savedAudioUrl);
+      setAudioProvider(savedAudioProvider);
+      // Set up audio element with saved URL
+      if (audioRef.current) {
+        audioRef.current.src = savedAudioUrl;
+        audioRef.current.load();
+      }
+    }
+  }, [savedAudioUrl, savedAudioProvider]);
 
   return (
     <div className="space-y-4">

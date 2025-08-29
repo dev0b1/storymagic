@@ -28,6 +28,8 @@ interface ChatMessage {
   storyId?: string;
   narrationMode?: string;
   audioUrl?: string;
+  userId?: string;
+  savedAudioProvider?: string;
   contentType?: string;
   source?: string;
   isPdf?: boolean;
@@ -37,6 +39,8 @@ interface ChatMessage {
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [selectedNarrationMode, setSelectedNarrationMode] = useState<'focus' | 'engaging' | 'doc_theatre'>('engaging'); // Default to Narration
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -67,29 +71,129 @@ export default function Dashboard() {
     }
   };
 
-  // Check auth state
+  // Firefox emergency reset function (accessible from console)
+  useEffect(() => {
+    if (navigator.userAgent.toLowerCase().includes('firefox')) {
+      (window as any).emergencyReset = async () => {
+        console.log('🔥 Emergency Reset: Clearing all auth data...');
+        
+        try {
+          // Clear all localStorage
+          const allKeys = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) allKeys.push(key);
+          }
+          allKeys.forEach(key => localStorage.removeItem(key));
+          
+          // Clear all sessionStorage
+          const allSessionKeys = [];
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key) allSessionKeys.push(key);
+          }
+          allSessionKeys.forEach(key => sessionStorage.removeItem(key));
+          
+          // Clear auth service data
+          await authService.clearStaleAuthData();
+          
+          console.log('✅ Emergency reset complete! Redirecting to auth...');
+          
+          // Force reload to auth page
+          window.location.href = '/auth';
+        } catch (error) {
+          console.error('Emergency reset failed:', error);
+          // Force reload anyway
+          window.location.reload();
+        }
+      };
+      
+      console.log('🦊 Firefox detected! If you get stuck, run: emergencyReset() in console');
+    }
+  }, []);
+
+  // Check auth state with timeout for Firefox compatibility
   useEffect(() => {
     const checkAuth = async () => {
       console.log('Checking auth state...');
+      setAuthLoading(true);
+      setAuthError(null);
+      
       try {
-        const currentUser = await authService.getCurrentUser();
+        // Add timeout for Firefox compatibility
+        const authPromise = authService.getCurrentUser();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Auth check timeout - please refresh the page')), 10000)
+        );
+        
+        const currentUser = await Promise.race([authPromise, timeoutPromise]) as User | null;
         console.log('Current user from auth service:', currentUser);
         
         if (!currentUser) {
           console.log('No user found, redirecting to auth...');
+          setAuthLoading(false);
           safeNavigate(setLocation, '/auth');
           return;
         }
         
         console.log('User found, setting user state:', currentUser);
         setUser(currentUser);
+        setAuthLoading(false);
       } catch (error) {
         console.error('Auth check failed:', error);
-        safeNavigate(setLocation, '/auth');
+        setAuthError(error instanceof Error ? error.message : 'Authentication failed');
+        
+        // Firefox-specific aggressive cleanup
+        try {
+          const isDemo = localStorage.getItem('demo_user') === 'true';
+          const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+          
+          if (!isDemo) {
+            console.log('Clearing potentially stale auth data...');
+            
+            // Clear app-specific data
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userEmail');
+            localStorage.removeItem('userName');
+            
+            // Firefox: More aggressive cleanup
+            if (isFirefox) {
+              console.log('Firefox detected: Performing aggressive cache cleanup...');
+              
+              // Clear all supabase-related storage
+              const keysToRemove = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('supabase') || key.includes('sb-'))) {
+                  keysToRemove.push(key);
+                }
+              }
+              keysToRemove.forEach(key => localStorage.removeItem(key));
+              
+              // Clear sessionStorage
+              const sessionKeysToRemove = [];
+              for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                if (key && (key.includes('supabase') || key.includes('sb-'))) {
+                  sessionKeysToRemove.push(key);
+                }
+              }
+              sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+            }
+          }
+        } catch (storageError) {
+          console.warn('Failed to clear storage:', storageError);
+        }
+        
+        setAuthLoading(false);
+        // Give user a moment to see the error, then redirect
+        setTimeout(() => safeNavigate(setLocation, '/auth'), 3000);
       }
     };
 
-    checkAuth();
+    // Add a small delay to ensure DOM is ready, especially important for Firefox
+    const timeout = setTimeout(checkAuth, 100);
+    return () => clearTimeout(timeout);
   }, [setLocation]);
 
   // Fetch user details
@@ -99,9 +203,9 @@ export default function Dashboard() {
     retry: false,
     staleTime: 0,
     queryFn: async () => {
-      const response = await fetch('/api/me', {
-        headers: { 'x-user-id': user!.id }
-      });
+    const { buildAuthHeaders } = await import('@/lib/request-headers');
+    const headers = await buildAuthHeaders({ userId: user!.id, includeContentType: false });
+    const response = await fetch('/api/me', { headers });
       if (!response.ok) throw new Error('Failed to fetch user details');
       const userData = await response.json();
       
@@ -123,18 +227,9 @@ export default function Dashboard() {
     retry: false,
     staleTime: 0,
     queryFn: async () => {
-      const headers: Record<string, string> = { 'x-user-id': user!.id };
-      if (localStorage.getItem('demo_user') === 'true') {
-        headers['x-demo-user'] = 'true';
-      } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
-        const { supabase } = await import('@/lib/supabase');
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-          if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
-        }
-      }
-      const response = await fetch('/api/stories', { headers });
+  const { buildAuthHeaders } = await import('@/lib/request-headers');
+  const headers = await buildAuthHeaders({ userId: user!.id, includeContentType: false });
+  const response = await fetch('/api/stories', { headers });
       if (!response.ok) throw new Error('Failed to fetch stories');
       return response.json();
     }
@@ -150,7 +245,7 @@ export default function Dashboard() {
           id: `user-${story.id}`,
           type: 'user',
           content: story.input_text,
-          timestamp: new Date(story.created_at),
+          timestamp: new Date(story.created_at ?? Date.now()),
           isPdf: story.source === 'pdf'
         });
         
@@ -159,11 +254,14 @@ export default function Dashboard() {
           id: `system-${story.id}`,
           type: 'system',
           content: story.output_story,
-          timestamp: new Date(story.created_at),
+          timestamp: new Date(story.created_at ?? Date.now()),
           storyId: story.id,
           narrationMode: story.narration_mode,
           contentType: story.content_type || 'general',
-          source: story.source || 'text'
+          source: story.source || 'text',
+          audioUrl: story.audio_url ?? undefined,
+          savedAudioProvider: story.audio_provider ?? undefined,
+          userId: story.user_id
         });
       });
       setChatMessages(messages.reverse()); // Show newest first
@@ -181,20 +279,8 @@ export default function Dashboard() {
       
       const endpoint = isPDFContent ? '/api/pdf-to-story' : '/api/story';
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'x-user-id': data.userId
-      };
-      if (localStorage.getItem('demo_user') === 'true') {
-        headers['x-demo-user'] = 'true';
-      } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
-        const { supabase } = await import('@/lib/supabase');
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-          if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
-        }
-      }
+      const { buildAuthHeaders } = await import('@/lib/request-headers');
+      const headers = await buildAuthHeaders({ userId: data.userId, includeContentType: true });
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -441,7 +527,7 @@ export default function Dashboard() {
         id: `user-${story.id}`,
         type: 'user',
         content: story.input_text,
-        timestamp: new Date(story.created_at),
+  timestamp: new Date(story.created_at ?? Date.now()),
         isPdf: story.source === 'pdf'
       };
       
@@ -449,11 +535,14 @@ export default function Dashboard() {
         id: `system-${story.id}`,
         type: 'system',
         content: story.output_story,
-        timestamp: new Date(story.created_at),
+  timestamp: new Date(story.created_at ?? Date.now()),
         storyId: story.id,
         narrationMode: story.narration_mode,
         contentType: story.content_type || 'general',
-        source: story.source || 'text'
+        source: story.source || 'text',
+  audioUrl: story.audio_url ?? undefined,
+  savedAudioProvider: story.audio_provider ?? undefined,
+  userId: story.user_id
       };
       
       setChatMessages(prev => [...prev, userMessage, systemMessage]);
@@ -464,6 +553,9 @@ export default function Dashboard() {
     try {
       console.log('Starting sign out process...');
       
+      // Set loading state to show user something is happening
+      setAuthLoading(true);
+      
       // Clear user state immediately to prevent UI issues
       setUser(null);
       
@@ -473,20 +565,58 @@ export default function Dashboard() {
       // Call auth service to sign out
       await authService.signOut();
       
+      // Clear auth loading state
+      setAuthLoading(false);
+      
       // Force navigate to auth page
       console.log('Navigating to auth page...');
-      window.location.href = '/auth';
+      safeNavigate(setLocation, '/auth');
     } catch (error) {
       console.error('Sign out error:', error);
+      
+      // Clear loading state even on error
+      setAuthLoading(false);
+      
       // Force redirect even if there's an error
-      window.location.href = '/auth';
+      safeNavigate(setLocation, '/auth');
     }
   };
 
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="text-center max-w-md mx-auto p-6">
+          {authError ? (
+            <>
+              <div className="text-red-500 text-2xl mb-4">⚠️</div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Error</h2>
+              <p className="text-gray-600 mb-4">{authError}</p>
+              <p className="text-sm text-gray-500">Redirecting to login page in a few seconds...</p>
+              <button 
+                onClick={() => safeNavigate(setLocation, '/auth')}
+                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              >
+                Go to Login Now
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-600 mb-2">
+                {authLoading ? 'Checking authentication...' : 'Loading dashboard...'}
+              </p>
+              <p className="text-sm text-gray-500">This usually takes just a moment</p>
+              {authLoading && (
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="mt-4 px-4 py-2 text-blue-500 hover:text-blue-600 transition-colors text-sm"
+                >
+                  Taking too long? Refresh page
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -534,6 +664,8 @@ export default function Dashboard() {
                     content={message.content}
                     narrationMode={message.narrationMode || 'focus'}
                     audioUrl={message.audioUrl}
+                    savedAudioProvider={message.savedAudioProvider}
+                    userId={message.userId}
                     storyId={message.storyId}
                     timestamp={message.timestamp}
                     contentType={message.contentType}
