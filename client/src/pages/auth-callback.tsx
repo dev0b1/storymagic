@@ -10,98 +10,20 @@ export default function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(true);
 
   useEffect(() => {
+    let subscription: any = null;
     const handleAuthCallback = async () => {
       setIsProcessing(true);
       try {
         setStatus('Processing authentication...');
-        
+
         if (!isSupabaseConfigured) {
           throw new Error('Supabase not configured');
         }
-        console.log("Full url:", window.location.href);
-        console.log('🔍 URL Hash:', window.location.hash);
 
-        setStatus('Getting session...');
-        // First, try the SDK helper which consumes tokens from the URL
-        // (supabase v2+ provides getSessionFromUrl which parses the fragment).
-        try {
-          const authAny = supabase.auth as any;
-          if (typeof authAny.getSessionFromUrl === 'function') {
-            const fromUrl = await authAny.getSessionFromUrl();
-            if (fromUrl && fromUrl.data && fromUrl.data.session) {
-              console.log('✅ Session parsed from URL via getSessionFromUrl');
-              setStatus('Login successful! Redirecting...');
-              // Clear URL after successful processing
-              window.history.replaceState({}, document.title, window.location.pathname);
-              const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-              sessionStorage.removeItem('redirectAfterAuth');
-              safeNavigate(setLocation, redirectPath);
-              return;
-            }
-          }
-        } catch (err) {
-          console.debug('getSessionFromUrl not available or failed:', err);
-        }
-
-        // If tokens are present in the hash, try to set the session manually.
-        const hash = window.location.hash || '';
-        const waitForSession = async (timeoutMs = 3000, intervalMs = 150) => {
-          const start = Date.now();
-          while (Date.now() - start < timeoutMs) {
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session) return session;
-            } catch (e) {
-              // ignore and retry
-            }
-            await new Promise((r) => setTimeout(r, intervalMs));
-          }
-          return null;
-        };
-
-        if (hash.includes('access_token')) {
-          try {
-            const params = Object.fromEntries(new URLSearchParams(hash.replace(/^#/, '')));
-            if (params.access_token) {
-              const authAny = supabase.auth as any;
-              if (typeof authAny.setSession === 'function') {
-                const { error: setErr } = await authAny.setSession({
-                  access_token: params.access_token,
-                  refresh_token: params.refresh_token,
-                });
-                if (setErr) {
-                  console.warn('setSession reported error:', setErr);
-                } else {
-                  console.log('✅ Session set from URL fragment');
-                  setStatus('Login successful! Redirecting...');
-                  // Wait for SDK/storage to reflect the session (polling)
-                  const s = await waitForSession(3000, 150);
-                  if (!s) console.warn('Timed out waiting for session to become available');
-                  window.history.replaceState({}, document.title, window.location.pathname);
-                  const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-                  sessionStorage.removeItem('redirectAfterAuth');
-                  console.log('Navigating to', redirectPath);
-                  safeNavigate(setLocation, redirectPath);
-                  return;
-                }
-              } else {
-                console.warn('setSession is not available on the Supabase client');
-              }
-            }
-          } catch (err) {
-            console.warn('Failed to set session from hash:', err);
-          }
-        }
-
-        // Last resort: try a plain getSession (may return if SDK processed URL automatically)
-        const { data:{session}, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
-          console.log("💥 Exchange error:", sessionError);
-          throw sessionError;
-        }
+        // Immediate session check
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          console.log('✅ magic link session established successfully via getSession');
-          setStatus('Login successful! Redirecting...');
+          console.log('Session already present, navigating...');
           window.history.replaceState({}, document.title, window.location.pathname);
           const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
           sessionStorage.removeItem('redirectAfterAuth');
@@ -109,8 +31,23 @@ export default function AuthCallback() {
           return;
         }
 
-        throw new Error('Session exchange completed but no session was returned');
+        // Subscribe to auth state changes. When Supabase resolves the magic link
+        // it will trigger onAuthStateChange with the new session.
+        const resp = supabase.auth.onAuthStateChange((_event, newSession) => {
+          if (newSession) {
+            console.log('onAuthStateChange fired, session available');
+            try {
+              subscription?.unsubscribe();
+            } catch (e) {}
+            window.history.replaceState({}, document.title, window.location.pathname);
+            const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
+            sessionStorage.removeItem('redirectAfterAuth');
+            safeNavigate(setLocation, redirectPath);
+          }
+        });
 
+        // store subscription for cleanup
+        subscription = resp.data?.subscription;
       } catch (err: any) {
         console.error('💥 Auth callback error:', err);
         setError(err.message);
@@ -121,6 +58,12 @@ export default function AuthCallback() {
     };
 
     handleAuthCallback();
+
+    return () => {
+      try {
+        subscription?.unsubscribe();
+      } catch (e) {}
+    };
   }, [setLocation]);
 
   return (
