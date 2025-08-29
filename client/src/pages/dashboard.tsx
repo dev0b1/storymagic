@@ -439,18 +439,10 @@ export default function Dashboard() {
           formData.append('instructions', inputText);
         }
         
-        const headers: Record<string, string> = { 'x-user-id': user.id };
-        if (localStorage.getItem('demo_user') === 'true') {
-          headers['x-demo-user'] = 'true';
-        } else if ((await import('@/lib/supabase')).isSupabaseConfigured) {
-          const { supabase } = await import('@/lib/supabase');
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            headers['Authorization'] = `Bearer ${session.access_token}`;
-            if (session.refresh_token) headers['x-refresh-token'] = session.refresh_token;
-          }
-        }
-        
+        // Use centralized header builder (omit Content-Type for FormData)
+        const { buildAuthHeaders } = await import('@/lib/request-headers');
+        const headers = await buildAuthHeaders({ userId: user.id, includeContentType: false });
+
         const response = await fetch('/api/upload-pdf', {
           method: 'POST',
           headers,

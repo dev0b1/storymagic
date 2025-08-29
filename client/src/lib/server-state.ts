@@ -55,9 +55,9 @@ export const serverStateManager = {
       }
 
       return false;
-    } catch (error: unknown) {
+    } catch (error) {
       // Check if it's an abort error (timeout) or actual server error
-      if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+      if (error && error.name === 'AbortError') {
         console.log('Server connectivity check timed out');
       } else {
         console.log('Server connectivity check failed:', error);
