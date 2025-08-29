@@ -35,6 +35,9 @@ export interface User {
   subscription_status?: 'free' | 'active' | 'inactive' | 'cancelled';
   subscription_id?: string | null;
   subscription_end_date?: string | null;
+  // LemonSqueezy fields
+  lemonsqueezy_customer_id?: string | null;
+  lemonsqueezy_subscription_id?: string | null;
   // payment provider ids
   paystack_customer_id?: string | null;
   paystack_customer_code?: string | null;

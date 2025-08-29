@@ -1304,7 +1304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.updateUser(userId, {
         is_premium: true,
         subscription_status: 'active',
-        lemonsqueezy_customer_id: orderData.attributes.customer_id?.toString()
+        lemonsqueezy_customer_id: orderData.attributes.customer_id?.toString() || null
       });
 
       console.log('User upgraded to premium:', userId);
@@ -1341,7 +1341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update user subscription info
       await db.updateUser(userId, {
         lemonsqueezy_subscription_id: subscriptionData.id,
-        subscription_end_date: new Date(subscriptionData.attributes.renews_at)
+        subscription_end_date: subscriptionData.attributes.renews_at ? new Date(subscriptionData.attributes.renews_at).toISOString() : null
       });
 
       console.log('Subscription created for user:', userId);
@@ -1369,7 +1369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.updateUser(user.id, {
         is_premium: isActive,
         subscription_status: isActive ? 'active' : status,
-        subscription_end_date: endsAt ? new Date(endsAt) : (renewsAt ? new Date(renewsAt) : null)
+        subscription_end_date: endsAt ? new Date(endsAt).toISOString() : (renewsAt ? new Date(renewsAt).toISOString() : null)
       });
 
       console.log('Subscription updated for user:', user.id, 'Status:', status);
@@ -1393,7 +1393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endsAt = subscriptionData.attributes.ends_at;
       await db.updateUser(user.id, {
         subscription_status: 'cancelled',
-        subscription_end_date: endsAt ? new Date(endsAt) : null
+        subscription_end_date: endsAt ? new Date(endsAt).toISOString() : null
       });
 
       // If the subscription has already ended, remove premium access

@@ -124,7 +124,7 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 3000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = PORT; // Use config port instead of process.env.PORT
+  const port = process.env.port || PORT; // Use config port instead of process.env.PORT
   server.listen({
     port,
     host: "0.0.0.0",
