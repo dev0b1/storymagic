@@ -33,21 +33,49 @@ export default function AuthCallback() {
 
         // Subscribe to auth state changes. When Supabase resolves the magic link
         // it will trigger onAuthStateChange with the new session.
-        const resp = supabase.auth.onAuthStateChange((_event, newSession) => {
-          if (newSession) {
-            console.log('onAuthStateChange fired, session available');
-            try {
-              subscription?.unsubscribe();
-            } catch (e) {}
+        let resolved = false;
+        let resolvePromise: (() => void) | null = null;
+        const waitForAuth = new Promise<void>((resolve) => {
+          resolvePromise = resolve;
+          const resp = supabase.auth.onAuthStateChange((_event, newSession) => {
+            if (newSession) {
+              resolved = true;
+              try { subscription?.unsubscribe(); } catch (e) {}
+              window.history.replaceState({}, document.title, window.location.pathname);
+              const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
+              sessionStorage.removeItem('redirectAfterAuth');
+              safeNavigate(setLocation, redirectPath);
+              resolve();
+            }
+          });
+
+          // store subscription for cleanup
+          subscription = resp.data?.subscription;
+        });
+
+        // Wait for either the auth event or a timeout (Brave/privacy browsers can block storage or delay)
+        const TIMEOUT_MS = 10000; // 10s
+        await Promise.race([
+          waitForAuth,
+          new Promise((r) => setTimeout(r, TIMEOUT_MS)),
+        ]);
+
+        // If timed out and not resolved, try a final explicit session check before failing
+        if (!resolved) {
+          setStatus('Finalizing authentication check...');
+          const { data: { session: finalSession } } = await supabase.auth.getSession();
+          if (finalSession) {
+            console.log('Final session check succeeded, navigating...');
             window.history.replaceState({}, document.title, window.location.pathname);
             const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
             sessionStorage.removeItem('redirectAfterAuth');
             safeNavigate(setLocation, redirectPath);
+            return;
           }
-        });
 
-        // store subscription for cleanup
-        subscription = resp.data?.subscription;
+          // No session after timeout -> show a helpful error and fall back to login
+          throw new Error('Timed out waiting for authentication. This may happen on privacy browsers (Brave). Please try logging in again or use another browser.');
+        }
       } catch (err: any) {
         console.error('💥 Auth callback error:', err);
         setError(err.message);
