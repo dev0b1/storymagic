@@ -638,24 +638,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!code) return res.redirect('/auth/auth-code-error');
 
-      // Create a server-side Supabase client using environment variables
+      // Create a server-side Supabase client using environment variables.
+      // IMPORTANT: The service role key is required for the code exchange.
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
       if (!supabaseUrl || !supabaseKey) {
-        console.warn('Server OAuth: missing Supabase server credentials');
-        return res.redirect('/auth/auth-code-error');
+        console.error('Server OAuth Error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set in the environment.');
+        return res.redirect('/auth/auth-code-error?reason=misconfigured');
       }
 
       const serverClient = createServerSupabaseClient(supabaseUrl, supabaseKey);
       // Exchange the code for a session
-      // @ts-ignore - exchangeCodeForSession exists on server client
-      const { error } = await (serverClient.auth as any).exchangeCodeForSession(code);
+      const { data, error } = await serverClient.auth.exchangeCodeForSession(code);
+
       if (error) {
-        console.warn('Server OAuth exchange failed:', error);
-        return res.redirect('/auth/auth-code-error');
+        console.error('Server OAuth exchange failed:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        });
+        return res.redirect(`/auth/auth-code-error?reason=${encodeURIComponent(error.message)}`);
       }
 
-      // Determine redirect host
+      if (!data.session) {
+        console.error('Server OAuth Error: No session returned after code exchange.');
+        return res.redirect('/auth/auth-code-error?reason=no_session');
+      }
+
+      // The session is now stored in the cookie, and the user is authenticated.
+      // Determine redirect host and send the user to the dashboard.
       const forwardedHost = req.headers['x-forwarded-host'] as string | undefined;
       const origin = req.protocol + '://' + (forwardedHost || req.get('host'));
       return res.redirect(`${origin}${next}`);
@@ -680,6 +692,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error('Error in /auth/callback alias:', err);
       return res.redirect('/auth/auth-code-error');
+    }
+  });
+
+  // Friendly error page for OAuth code-exchange failures (prevents 404)
+  app.get('/auth/auth-code-error', (req: Request, res) => {
+    try {
+      // Log incoming query params to help debugging (hash fragments are not sent to server)
+      console.warn('/auth/auth-code-error called with query:', req.query);
+
+      const params = Object.keys(req.query || {}).map(k => {
+        const v = req.query[k as keyof typeof req.query];
+        return `<li><strong>${String(k)}</strong>: ${String(v)}</li>`;
+      }).join('');
+
+      const html = `<!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <title>Authentication Error</title>
+            <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:40px;color:#111}a{color:#0b5fff}</style>
+          </head>
+          <body>
+            <h1>Authentication Error</h1>
+            <p>There was a problem during authentication. This page is shown so you don't see a 404.</p>
+            <p>If you're testing, check the server logs for details. Common causes: invalid redirect URI, missing server credentials, or the user denied consent.</p>
+            <h3>Query Parameters</h3>
+            <ul>${params || '<li><em>None</em></li>'}</ul>
+            <p><a href="/auth">Return to sign in</a></p>
+          </body>
+        </html>`;
+
+      res.status(200).header('Content-Type', 'text/html; charset=utf-8').send(html);
+    } catch (err) {
+      console.error('Error rendering /auth/auth-code-error page:', err);
+      res.status(500).send('Authentication error');
     }
   });
 
