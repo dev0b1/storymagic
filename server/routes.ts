@@ -631,8 +631,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/auth/callback-code', async (req: Request, res) => {
     try {
       const code = (req.query.code as string) || null;
-      let next = (req.query.next as string) || '/';
-      if (!next.startsWith('/')) next = '/';
+  // Default redirect after successful sign-in
+  let next = (req.query.next as string) || '/dashboard';
+  // Only allow internal paths to avoid open redirects
+  if (!next.startsWith('/')) next = '/dashboard';
 
       if (!code) return res.redirect('/auth/auth-code-error');
 
@@ -663,36 +665,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Backwards-compatible OAuth callback endpoint - handle provider redirects directly here.
-  // This lets Google (or other providers) redirect straight to the server without first hitting the SPA.
-  app.get('/auth/callback', async (req: Request, res) => {
+  // Alias route: accept common OAuth redirect path and forward to the code-exchange handler
+  app.get('/auth/callback', (req: Request, res) => {
     try {
-      const code = (req.query.code as string) || null;
-      let next = (req.query.next as string) || '/';
-      if (!next.startsWith('/')) next = '/';
-
-      if (!code) return res.redirect('/auth/auth-code-error');
-
-      const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !supabaseKey) {
-        console.warn('Server OAuth: missing Supabase server credentials');
-        return res.redirect('/auth/auth-code-error');
+      // Rebuild query string and forward to /auth/callback-code
+      const params = new URLSearchParams();
+      for (const key of Object.keys(req.query || {})) {
+        const val = req.query[key as keyof typeof req.query];
+        if (val !== undefined && val !== null) params.append(key, String(val));
       }
-
-      const serverClient = createServerSupabaseClient(supabaseUrl, supabaseKey);
-      // @ts-ignore - exchangeCodeForSession exists on server client
-      const { error } = await (serverClient.auth as any).exchangeCodeForSession(code);
-      if (error) {
-        console.warn('Server OAuth exchange failed:', error);
-        return res.redirect('/auth/auth-code-error');
-      }
-
-      const forwardedHost = req.headers['x-forwarded-host'] as string | undefined;
-      const origin = req.protocol + '://' + (forwardedHost || req.get('host'));
-      return res.redirect(`${origin}${next}`);
+      const qs = params.toString();
+      const forwardPath = `/auth/callback-code${qs ? '?' + qs : ''}`;
+      return res.redirect(forwardPath);
     } catch (err) {
-      console.error('Error in /auth/callback:', err);
+      console.error('Error in /auth/callback alias:', err);
       return res.redirect('/auth/auth-code-error');
     }
   });
