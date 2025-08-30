@@ -21,16 +21,7 @@ export function AuthGuard({
   const [, setLocation] = useLocation();
   const isDemo = typeof window !== 'undefined' && localStorage.getItem('demo_user') === 'true';
 
-  // Check if we're on the auth callback route
-  const isAuthCallback = typeof window !== 'undefined' && window.location.pathname === '/auth/callback';
-
   useEffect(() => {
-    // Skip all initialization logic for auth callback route
-    if (isAuthCallback) {
-      console.log('AuthGuard: Skipping initialization for auth callback route');
-      setIsChecking(false);
-      return;
-    }
 
     const initializeAuth = async () => {
       try {
@@ -78,7 +69,7 @@ export function AuthGuard({
     };
 
     initializeAuth();
-  }, [requireAuth, isAuthCallback]);
+  }, [requireAuth]);
 
   // Show error state if initialization failed
   if (initializationError) {
@@ -119,7 +110,7 @@ export function AuthGuard({
   }
 
   // Handle authenticated users trying to access auth pages
-  if (!requireAuth && user && !isAuthCallback) {
+  if (!requireAuth && user) {
     // Get stored redirect path or default to dashboard
     const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
     sessionStorage.removeItem('redirectAfterAuth'); // Clear stored path

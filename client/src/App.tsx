@@ -9,7 +9,6 @@ import Auth from "@/pages/auth";
 import Dashboard from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
-import AuthCallback from "@/pages/auth-callback";
 
 function Router() {
   return (
@@ -24,11 +23,7 @@ function Router() {
           <Auth />
         </AuthGuard>
       </Route>
-      <Route path="/auth/callback">
-        <AuthGuard requireAuth={false}>
-          <AuthCallback />
-        </AuthGuard>
-      </Route>
+  {/* OAuth callback is now handled server-side at /auth/callback */}
       <Route path="/dashboard">
         <AuthGuard>
           <Dashboard />
