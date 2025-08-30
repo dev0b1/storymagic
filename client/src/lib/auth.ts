@@ -13,31 +13,13 @@ export interface User {
 
 export const authService = {
   async setDemoSession(user: User & { access_token?: string; refresh_token?: string }) {
-    // Demo sessions should not touch Supabase auth. Persist lightweight demo state locally.
-    try {
-      localStorage.setItem('demo_user', 'true');
-      localStorage.setItem('userId', user.id);
-      localStorage.setItem('userEmail', user.email);
-      if (user.name) localStorage.setItem('userName', user.name);
-      if (typeof user.is_premium !== 'undefined') localStorage.setItem('is_premium', user.is_premium ? 'true' : 'false');
-      if (typeof user.stories_generated !== 'undefined') localStorage.setItem('stories_generated', String(user.stories_generated));
-    } catch (error) {
-      console.error('Demo session local persist failed:', error);
-      throw error;
-    }
+  // Demo sessions removed - this application now only supports Supabase Google OAuth.
+  throw new Error('Demo sessions are no longer supported. Use Google sign-in.');
   },
 
   async getCurrentUser(): Promise<User | null> {
     // First, honor demo session if present
-    const isDemo = localStorage.getItem('demo_user') === 'true';
-    if (isDemo) {
-      const id = localStorage.getItem('userId') || 'demo@gmail.com';
-      const email = localStorage.getItem('userEmail') || 'demo@gmail.com';
-      const name = localStorage.getItem('userName') || 'Demo User';
-      const is_premium = localStorage.getItem('is_premium') === 'true';
-      const stories_generated = Number(localStorage.getItem('stories_generated') || '0');
-      return { id, email, name, is_premium, stories_generated, subscription_status: 'free', subscription_id: null, subscription_end_date: null };
-    }
+  // Demo users removed. Proceed to check Supabase session.
 
     // Otherwise, use Supabase session
     if (!isSupabaseConfigured) return null;
@@ -147,44 +129,7 @@ export const authService = {
   },
 
   async signInWithMagicLink(email: string) {
-    if (!isSupabaseConfigured) {
-      throw new Error('Supabase not configured');
-    }
-
-    try {
-      const redirectTo = `${window.location.origin}/auth/callback`;
-      console.log('🔗 Generating magic link for:', email);
-      console.log('🔗 Redirect URL:', redirectTo);
-      
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: redirectTo,
-          // Magic link expires after 1 hour (3600 seconds)
-          // This does NOT affect session duration - only the magic link validity
-          shouldCreateUser: true, // Allow new user creation
-        },
-      });
-
-      if (error) {
-        console.error('❌ Magic link generation failed:', error);
-        console.error('❌ Error details:', {
-          message: error.message,
-          code: error.code || error.status,
-          name: error.name
-        });
-        throw error;
-      }
-      
-      console.log('✅ Magic link generated successfully');
-      console.log('📊 Magic link will expire in 1 hour');
-      console.log('📊 Magic link data:', data);
-      return { success: true };
-
-    } catch (error) {
-      console.error('Magic link sign in failed:', error);
-      return { success: false, error };
-    }
+  throw new Error('Magic link sign-in has been disabled. Use Google sign-in.');
   },
 
   async signInWithGoogle() {
@@ -198,8 +143,10 @@ export const authService = {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            prompt: 'select_account',
+            prompt: 'select_account consent',
+            access_type: 'offline', // request refresh token where supported
           },
+          scopes: 'email profile',
         },
       });
 
@@ -214,31 +161,41 @@ export const authService = {
 
   async signOut() {
     try {
-      // Clear ALL localStorage items related to user session
-      localStorage.removeItem('demo_user');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('is_premium');
-      localStorage.removeItem('stories_generated');
-      localStorage.removeItem('subscription_status');
+  // Clear localStorage items related to user session
+  localStorage.removeItem('userId');
+  localStorage.removeItem('userEmail');
+  localStorage.removeItem('userName');
+  localStorage.removeItem('is_premium');
+  localStorage.removeItem('stories_generated');
+  localStorage.removeItem('subscription_status');
       
       // Clear any cached redirect paths
       sessionStorage.removeItem('redirectAfterAuth');
       
       // Attempt to sign out of Supabase if configured
       if (isSupabaseConfigured) {
-        // This invalidates the current session AND any pending magic links
-        // Supabase automatically invalidates magic links when user logs out
-        const { error } = await supabase.auth.signOut({ scope: 'global' }); // Global signout invalidates everywhere
-        if (error && !error.message.includes('session_not_found')) {
-          console.warn('Signout error (continuing anyway):', error);
-          // Don't throw - continue with cleanup even if signout fails
+        // This invalidates the current session AND any pending magic links.
+        // Wrap in a timeout so logout UI isn't blocked by network issues or
+        // privacy browsers that delay third-party requests.
+        const signOutPromise = supabase.auth.signOut({ scope: 'global' });
+        const TIMEOUT_MS = 5000;
+        const result: any = await Promise.race([
+          signOutPromise,
+          new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), TIMEOUT_MS)),
+        ]);
+
+        if (result && result.timeout) {
+          console.warn(`Supabase signOut timed out after ${TIMEOUT_MS}ms — continuing local cleanup.`);
+        } else {
+          const { error } = result || {};
+          if (error && !error.message?.includes('session_not_found')) {
+            console.warn('Signout error (continuing anyway):', error);
+          }
+          console.log('✅ Supabase signOut finished (or returned an error we continued past)');
         }
-        console.log('✅ Supabase session invalidated (including any pending magic links)');
       }
       
-      // Clear session manager state
+  // Clear session manager state
       try {
         const { sessionManager } = await import('./session-manager');
         sessionManager.clearSession();
@@ -253,7 +210,7 @@ export const authService = {
     } catch (error) {
       console.error('Sign out failed:', error);
       
-      // Even if signout fails, still clear local data
+      // Even if signout throws, ensure local cleanup runs and return a graceful result
       try {
         await this.clearStaleAuthData();
         const { sessionManager } = await import('./session-manager');
@@ -261,7 +218,7 @@ export const authService = {
       } catch (cleanupError) {
         console.warn('Failed cleanup after signout error:', cleanupError);
       }
-      
+
       return { success: false, error };
     }
   },
@@ -332,26 +289,19 @@ export const authService = {
 
   async updateLocalUser(updates: Partial<User>) {
     try {
-      const isDemo = localStorage.getItem('demo_user') === 'true';
-      if (!isDemo) return; // Only persists for demo
-      if (updates.id) localStorage.setItem('userId', updates.id);
-      if (updates.email) localStorage.setItem('userEmail', updates.email);
-      if (typeof updates.name !== 'undefined') localStorage.setItem('userName', updates.name || '');
-      if (typeof updates.is_premium !== 'undefined') localStorage.setItem('is_premium', updates.is_premium ? 'true' : 'false');
-      if (typeof updates.stories_generated !== 'undefined') localStorage.setItem('stories_generated', String(updates.stories_generated));
-      if (typeof updates.subscription_status !== 'undefined') localStorage.setItem('subscription_status', updates.subscription_status || 'free');
+  // Persist basic user info locally where useful
+  if (updates.id) localStorage.setItem('userId', updates.id);
+  if (updates.email) localStorage.setItem('userEmail', updates.email);
+  if (typeof updates.name !== 'undefined') localStorage.setItem('userName', updates.name || '');
+  if (typeof updates.is_premium !== 'undefined') localStorage.setItem('is_premium', updates.is_premium ? 'true' : 'false');
+  if (typeof updates.stories_generated !== 'undefined') localStorage.setItem('stories_generated', String(updates.stories_generated));
+  if (typeof updates.subscription_status !== 'undefined') localStorage.setItem('subscription_status', updates.subscription_status || 'free');
     } catch (error) {
       console.warn('Failed to update local user storage:', error);
     }
   },
 
   onAuthStateChange(callback: (user: User | null) => void) {
-    // If demo session is active, immediately callback with demo user and no subscription
-    if (localStorage.getItem('demo_user') === 'true') {
-      this.getCurrentUser().then(callback);
-      return { data: { subscription: { unsubscribe: () => {} } } } as any;
-    }
-
     if (!isSupabaseConfigured) {
       callback(null);
       return { data: { subscription: { unsubscribe: () => {} } } } as any;

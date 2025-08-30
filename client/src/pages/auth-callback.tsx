@@ -10,88 +10,37 @@ export default function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(true);
 
   useEffect(() => {
-    let subscription: any = null;
-    const handleAuthCallback = async () => {
+    // Strict server-side OAuth flow only.
+    // If we got an authorization code from Google, forward it to the server
+    // which will exchange it for a Supabase session using the service key.
+    const handle = async () => {
       setIsProcessing(true);
       try {
-        setStatus('Processing authentication...');
-
         if (!isSupabaseConfigured) {
           throw new Error('Supabase not configured');
         }
 
-        // Immediate session check
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('Session already present, navigating...');
-          window.history.replaceState({}, document.title, window.location.pathname);
-          const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-          sessionStorage.removeItem('redirectAfterAuth');
-          safeNavigate(setLocation, redirectPath);
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        const next = url.searchParams.get('next') || '/dashboard';
+        if (code) {
+          const forwardUrl = `/auth/callback-code?code=${encodeURIComponent(code)}&next=${encodeURIComponent(next)}`;
+          window.location.href = forwardUrl;
           return;
         }
 
-        // Subscribe to auth state changes. When Supabase resolves the magic link
-        // it will trigger onAuthStateChange with the new session.
-        let resolved = false;
-        let resolvePromise: (() => void) | null = null;
-        const waitForAuth = new Promise<void>((resolve) => {
-          resolvePromise = resolve;
-          const resp = supabase.auth.onAuthStateChange((_event, newSession) => {
-            if (newSession) {
-              resolved = true;
-              try { subscription?.unsubscribe(); } catch (e) {}
-              window.history.replaceState({}, document.title, window.location.pathname);
-              const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-              sessionStorage.removeItem('redirectAfterAuth');
-              safeNavigate(setLocation, redirectPath);
-              resolve();
-            }
-          });
-
-          // store subscription for cleanup
-          subscription = resp.data?.subscription;
-        });
-
-        // Wait for either the auth event or a timeout (Brave/privacy browsers can block storage or delay)
-        const TIMEOUT_MS = 10000; // 10s
-        await Promise.race([
-          waitForAuth,
-          new Promise((r) => setTimeout(r, TIMEOUT_MS)),
-        ]);
-
-        // If timed out and not resolved, try a final explicit session check before failing
-        if (!resolved) {
-          setStatus('Finalizing authentication check...');
-          const { data: { session: finalSession } } = await supabase.auth.getSession();
-          if (finalSession) {
-            console.log('Final session check succeeded, navigating...');
-            window.history.replaceState({}, document.title, window.location.pathname);
-            const redirectPath = sessionStorage.getItem('redirectAfterAuth') || '/dashboard';
-            sessionStorage.removeItem('redirectAfterAuth');
-            safeNavigate(setLocation, redirectPath);
-            return;
-          }
-
-          // No session after timeout -> show a helpful error and fall back to login
-          throw new Error('Timed out waiting for authentication. This may happen on privacy browsers (Brave). Please try logging in again or use another browser.');
-        }
+        // No code present — we only support server-side OAuth code exchange.
+        throw new Error('No authorization code found. Please sign in via Google from the sign in page.');
       } catch (err: any) {
-        console.error('💥 Auth callback error:', err);
-        setError(err.message);
-        setTimeout(() => safeNavigate(setLocation, '/auth?error=' + encodeURIComponent(err.message)), 3000);
+        console.error('Auth callback error:', err);
+        setError(err?.message || String(err));
+        setTimeout(() => safeNavigate(setLocation, '/auth?error=' + encodeURIComponent(err?.message || String(err))), 3000);
       } finally {
         setIsProcessing(false);
       }
     };
 
-    handleAuthCallback();
-
-    return () => {
-      try {
-        subscription?.unsubscribe();
-      } catch (e) {}
-    };
+    handle();
   }, [setLocation]);
 
   return (

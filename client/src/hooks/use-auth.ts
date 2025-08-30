@@ -35,23 +35,7 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    const isDemo = typeof window !== 'undefined' && localStorage.getItem('demo_user') === 'true';
-
-    if (isDemo) {
-      // Fast-path for demo: no Supabase session involved
-      authService.getCurrentUser()
-        .then((u) => setUser(u))
-        .finally(() => setIsLoading(false));
-      // Also watch auth state changes (no-op unsubscribe for demo)
-      const sub: any = authService.onAuthStateChange((u) => {
-        console.log('useAuth: Demo user auth state changed:', u);
-        setUser(u);
-        setIsLoading(false);
-      });
-      return () => {
-        try { (sub as any)?.data?.subscription?.unsubscribe?.(); } catch {}
-      };
-    }
+  // Initialize via Supabase-backed auth only
 
     // Non-demo: use Supabase session manager and auth state
     const loadUser = async () => {
@@ -74,7 +58,6 @@ export function useAuth() {
     if (!sessionManager.isInitialized()) {
       loadUser();
     } else {
-      // Already initialized; still try to fetch user once
       authService.getCurrentUser().then(setUser).finally(() => setIsLoading(false));
     }
 

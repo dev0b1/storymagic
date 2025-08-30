@@ -57,8 +57,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 // Optional auth - allows both authenticated and anonymous access
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  // For now we require explicit Bearer token for authenticated endpoints.
   const authHeader = req.headers.authorization;
-  
   if (!authHeader?.startsWith('Bearer ')) {
     req.user = null;
     return next();
@@ -73,30 +73,5 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     req.user = null;
   }
 
-  next();
-}
-
-// Demo user middleware
-export async function handleDemoUser(req: Request, res: Response, next: NextFunction) {
-  const isDemoUser = req.headers['x-demo-user'] === 'true';
-  
-  if (isDemoUser) {
-    req.user = {
-      id: 'demo@gmail.com',
-      email: 'demo@gmail.com',
-      user_metadata: { name: 'Demo User' },
-      app_metadata: { provider: 'demo' },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      role: 'authenticated',
-      phone: '',
-      confirmed_at: new Date().toISOString(),
-      email_confirmed_at: new Date().toISOString(),
-      last_sign_in_at: new Date().toISOString(),
-      factor_confirmed_at: null
-    } as User;
-  }
-  
   next();
 }

@@ -10,10 +10,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import { config, hasValidApiKeys } from './config.js';
-import { requireAuth, optionalAuth, handleDemoUser } from './middleware/auth';
+import { requireAuth, optionalAuth } from './middleware/auth';
 import { User } from '@supabase/supabase-js';
 import type { User as DbUser } from '@shared/schema';
 import { lemonSqueezyService } from './services/lemonsqueezy.js';
+import { createClient as createServerSupabaseClient } from '@supabase/supabase-js';
 
 // Safely import pdf-parse to avoid test file errors
 let pdf: any = null;
@@ -626,6 +627,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Server-side OAuth code exchange endpoint
+  app.get('/auth/callback-code', async (req: Request, res) => {
+    try {
+      const code = (req.query.code as string) || null;
+      let next = (req.query.next as string) || '/';
+      if (!next.startsWith('/')) next = '/';
+
+      if (!code) return res.redirect('/auth/auth-code-error');
+
+      // Create a server-side Supabase client using environment variables
+      const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !supabaseKey) {
+        console.warn('Server OAuth: missing Supabase server credentials');
+        return res.redirect('/auth/auth-code-error');
+      }
+
+      const serverClient = createServerSupabaseClient(supabaseUrl, supabaseKey);
+      // Exchange the code for a session
+      // @ts-ignore - exchangeCodeForSession exists on server client
+      const { error } = await (serverClient.auth as any).exchangeCodeForSession(code);
+      if (error) {
+        console.warn('Server OAuth exchange failed:', error);
+        return res.redirect('/auth/auth-code-error');
+      }
+
+      // Determine redirect host
+      const forwardedHost = req.headers['x-forwarded-host'] as string | undefined;
+      const origin = req.protocol + '://' + (forwardedHost || req.get('host'));
+      return res.redirect(`${origin}${next}`);
+    } catch (err) {
+      console.error('Error in /auth/callback-code:', err);
+      return res.redirect('/auth/auth-code-error');
+    }
+  });
+
   // Direct Supabase connectivity check (legacy endpoint)
   app.get('/api/health/supabase', async (req, res) => {
     try {
@@ -645,7 +682,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate story endpoint with limits
-  app.post("/api/story", optionalAuth, handleDemoUser, async (req, res) => {
+  app.post("/api/story", optionalAuth, async (req, res) => {
     try {
       const { inputText, narrationMode = 'balanced' } = req.body;
       console.log('📝 Story generation request from user:', req.user?.id);
@@ -811,7 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user stories
-  app.get("/api/stories", optionalAuth, handleDemoUser, async (req, res) => {
+  app.get("/api/stories", optionalAuth, async (req, res) => {
     console.log('� User:', req.user);
     
     if (!req.user) {
@@ -1187,7 +1224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Simple upgrade endpoint for MVP: marks user as premium
-  app.post('/api/upgrade', optionalAuth, handleDemoUser, async (req, res) => {
+  app.post('/api/upgrade', optionalAuth, async (req, res) => {
     try {
       const headerUserId = req.headers['x-user-id'] as string | undefined;
       const authUserId = req.user?.id as string | undefined;
@@ -1204,7 +1241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Lemon Squeezy payment endpoints
-  app.post('/api/payment/lemonsqueezy/create-checkout', optionalAuth, handleDemoUser, async (req, res) => {
+  app.post('/api/payment/lemonsqueezy/create-checkout', optionalAuth, async (req, res) => {
     try {
       const { email, userId } = req.body;
       const authUserId = req.user?.id || req.headers['x-user-id'] as string;
@@ -1410,7 +1447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Get subscription status
-  app.get('/api/subscription/status', optionalAuth, handleDemoUser, async (req, res) => {
+  app.get('/api/subscription/status', optionalAuth, async (req, res) => {
     try {
       const userId = req.user?.id || req.headers['x-user-id'] as string;
       if (!userId) return res.status(401).json({ message: 'Unauthorized' });

@@ -49,15 +49,7 @@ export interface User {
 
 export const authService = {
   async signInWithMagicLink(email: string) {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) throw error;
-    return { success: true };
+  throw new Error('Magic link sign-in has been disabled. Use Google sign-in or demo.');
   },
 
   async signInWithGoogle() {
@@ -66,8 +58,10 @@ export const authService = {
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          prompt: 'select_account', // Forces Google account selection
+          prompt: 'select_account consent',
+          access_type: 'offline',
         },
+        scopes: 'email profile',
       },
     });
 
