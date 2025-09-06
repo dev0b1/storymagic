@@ -66,7 +66,7 @@ export async function POST(req: Request) {
           'X-Title': 'StoryMagic AI'
         },
         body: JSON.stringify({
-          model: 'mistralai/mistral-small-2411',
+          model: 'mistralai/mistral-small-3.2-24b-instruct:free',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `User input: "${inputText}"` }

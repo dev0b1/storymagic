@@ -137,7 +137,8 @@ export function SystemMessage({
 
       const { buildAuthHeaders } = await import('@/lib/request-headers');
       const headers = await buildAuthHeaders({ userId: userId || undefined });
-
+       
+      console.log("Generating audio with headers:", headers);
       const response = await fetch(`/api/story/${storyId}/audio?withMusic=true`, {
         method: 'POST',
         headers

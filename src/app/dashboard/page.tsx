@@ -165,7 +165,6 @@ export default function DashboardPage() {
   };
 
   return (
-    <AuthGuard>
       <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Chat Header */}
       <ChatHeader
@@ -270,6 +269,5 @@ export default function DashboardPage() {
         storiesGenerated={0} // TODO: Get from user data
       />
       </div>
-    </AuthGuard>
   );
 }
