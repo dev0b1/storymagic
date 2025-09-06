@@ -2,20 +2,17 @@
 
 interface ApiClientOptions {
   user?: { id: string } | null;
-  demoUser?: string | null;
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const { user, demoUser } = options;
+  const { user } = options;
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json'
   };
   
-  // Add demo user header if available
-  if (demoUser) {
-    headers['x-demo-user-id'] = demoUser;
-  } else if (user?.id) {
+  // Add user ID header if available
+  if (user?.id) {
     headers['x-user-id'] = user.id;
   }
   

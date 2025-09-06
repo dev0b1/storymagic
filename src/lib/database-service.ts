@@ -1,27 +1,9 @@
 import { db } from '@/lib/db';
 import { users, stories } from '@shared/schema';
 import { eq, desc } from 'drizzle-orm';
-import { DemoDatabase } from './demo-database';
-
-// Check if we should use demo database
-let useDemoDatabase = false;
-
-// Test database connection on startup
-(async () => {
-  try {
-    await db.select().from(users).limit(1);
-    console.log('Real database connection successful');
-  } catch (error) {
-    console.warn('Real database unavailable, using demo database:', error);
-    useDemoDatabase = true;
-  }
-})();
 
 export class DatabaseService {
   static async validateDatabase(): Promise<boolean> {
-    if (useDemoDatabase) {
-      return DemoDatabase.validateDatabase();
-    }
     try {
       console.log('Validating database connection...');
       // Simple selects to ensure tables exist
@@ -30,23 +12,18 @@ export class DatabaseService {
       console.log('Database validation successful');
       return true;
     } catch (error) {
-      console.error('Database validation failed, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.validateDatabase();
+      console.error('Database validation failed:', error);
+      throw new Error(`Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   static async getUser(userId: string) {
-    if (useDemoDatabase) {
-      return DemoDatabase.getUser(userId);
-    }
     try {
       const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       return rows[0] || null;
     } catch (error) {
-      console.error('Error fetching user, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.getUser(userId);
+      console.error('Error fetching user:', error);
+      throw new Error(`Failed to fetch user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -56,9 +33,6 @@ export class DatabaseService {
   }
 
   static async getUserStories(userId: string, limit: number = 50) {
-    if (useDemoDatabase) {
-      return DemoDatabase.getUserStories(userId, limit);
-    }
     try {
       const rows = await db
         .select()
@@ -68,9 +42,8 @@ export class DatabaseService {
         .limit(limit);
       return rows;
     } catch (error) {
-      console.error('Error fetching user stories, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.getUserStories(userId, limit);
+      console.error('Error fetching user stories:', error);
+      throw new Error(`Failed to fetch user stories: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -81,9 +54,6 @@ export class DatabaseService {
     narration_mode: string;
     source: 'api' | 'pdf';
   }) {
-    if (useDemoDatabase) {
-      return DemoDatabase.createStory(input);
-    }
     try {
       // Ensure output_story is not null for database insertion
       const storyData = {
@@ -93,9 +63,8 @@ export class DatabaseService {
       const [row] = await db.insert(stories).values(storyData).returning();
       return row || null;
     } catch (error) {
-      console.error('Error creating story, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.createStory(input);
+      console.error('Error creating story:', error);
+      throw new Error(`Failed to create story: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -106,30 +75,22 @@ export class DatabaseService {
     is_premium: boolean;
     stories_generated: number;
   }) {
-    if (useDemoDatabase) {
-      return DemoDatabase.createUser(input);
-    }
     try {
       const [row] = await db.insert(users).values(input).returning();
       return row || null;
     } catch (error) {
-      console.error('Error creating user, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.createUser(input);
+      console.error('Error creating user:', error);
+      throw new Error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   static async updateUser(userId: string, updates: Partial<typeof users.$inferSelect>) {
-    if (useDemoDatabase) {
-      return DemoDatabase.updateUser(userId, updates);
-    }
     try {
       const [row] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
       return row || null;
     } catch (error) {
-      console.error('Error updating user, switching to demo mode:', error);
-      useDemoDatabase = true;
-      return DemoDatabase.updateUser(userId, updates);
+      console.error('Error updating user:', error);
+      throw new Error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

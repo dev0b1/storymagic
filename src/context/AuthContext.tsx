@@ -7,10 +7,8 @@ import { supabase } from '@/lib/supabase';
 // Define the type of values the context will store
 type AuthContextType = {
   user: User | null;
-  demoUser: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  setDemoUser: (email: string | null) => void;
 };
 
 // Create the context (empty at first)
@@ -19,7 +17,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Provider component wraps the app and gives access to the context
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [demoUser, setDemoUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,14 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setUser(null);
-      setDemoUser(null);
     } catch (error) {
       console.error('Error signing out:', error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, demoUser, loading, signOut, setDemoUser }}>
+    <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -13,14 +13,14 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("")
-  const { user, demoUser, loading, setDemoUser } = useAuth()
+  const { user, loading } = useAuth()
 
   useEffect(() => {
-    // Redirect if user is already signed in or demo user is active
-    if ((user || demoUser) && !loading) {
+    // Redirect if user is already signed in
+    if (user && !loading) {
       router.push('/dashboard');
     }
-  }, [user, demoUser, loading, router]);
+  }, [user, loading, router]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -37,18 +37,6 @@ export default function AuthPage() {
       if (error) throw error;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  const handleDemoSignin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      setDemoUser("demouser@gmail.com");
-      router.push("/dashboard");
-    } catch (err) {
-      setError('Demo login failed');
     } finally {
       setIsLoading(false);
     }
@@ -89,9 +77,6 @@ export default function AuthPage() {
               </svg>
             )}
             {isLoading ? 'Signing in...' : 'Continue with Google'}
-          </Button>
-          <Button onClick={handleDemoSignin}>
-            Try Demo
           </Button>
 
           {error && (

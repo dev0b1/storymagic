@@ -13,11 +13,13 @@ export async function GET(req: Request) {
     
     // If user doesn't exist, create them
     if (!dbUser) {
-      const email = user.email || `${user.id}@demo.com`;
+      if (!user.email) {
+        throw new Error('User email is required');
+      }
       dbUser = await DatabaseService.createUser({
         id: user.id,
-        email: email,
-        name: email.split('@')[0],
+        email: user.email,
+        name: user.email.split('@')[0],
         is_premium: false,
         stories_generated: 0
       });
