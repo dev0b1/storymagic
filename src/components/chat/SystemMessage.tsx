@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { EnhancedAudioPlayer } from '@/components/ui/enhanced-audio-player';
+import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -17,7 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { NARRATION_MODES } from '@/components/narration-mode-card';
-import { authService } from '@/lib/auth';
+import { createApiClient } from '@/lib/api-client';
 
 interface SystemMessageProps {
   title: string;
@@ -70,6 +71,10 @@ export function SystemMessage({
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [highlightedText, setHighlightedText] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
+  const { user, loading, signOut } = useAuth();
+
+
+  const apiClient = createApiClient({user})
 
   // Auto-generate audio when story is created without audio
   useEffect(() => {
@@ -139,11 +144,7 @@ export function SystemMessage({
       const headers = await buildAuthHeaders({ userId: userId || undefined });
        
       console.log("Generating audio with headers:", headers);
-      const response = await fetch(`/api/story/${storyId}/audio?withMusic=true`, {
-        method: 'POST',
-        headers
-      });
-      
+      const response = await apiClient.post(`/api/story/${storyId}/audio?withMusic=true`,{})
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
         throw new Error(errorData.message || `Server error: ${response.status}`);

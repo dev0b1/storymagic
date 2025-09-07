@@ -8,7 +8,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApiClient } from '@/lib/api-client';
-import { AuthGuard } from '@/components/auth-guard';
 
 // Chat components
 import { ChatHeader } from '@/components/chat/ChatHeader';

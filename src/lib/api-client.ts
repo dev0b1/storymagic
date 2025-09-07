@@ -1,4 +1,4 @@
-// API client with authentication headers
+import { supabase } from "@/lib/supabase"; // adjust import if needed
 
 interface ApiClientOptions {
   user?: { id: string } | null;
@@ -6,44 +6,68 @@ interface ApiClientOptions {
 
 export function createApiClient(options: ApiClientOptions = {}) {
   const { user } = options;
-  
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json'
-  };
-  
-  // Add user ID header if available
-  if (user?.id) {
-    headers['x-user-id'] = user.id;
+
+  // Helper: fetch latest session and prepare headers
+  async function getAuthHeaders() {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    // add custom user header if provided
+    if (user?.id) {
+      headers["x-user-id"] = user.id;
+    }
+
+    // add supabase access token if available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    return headers;
   }
-  
+
   return {
-    async post(url: string, data: any) {
+    // ✅ GET requests
+    async get(url: string, init?: RequestInit) {
+      const headers = await getAuthHeaders();
       const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
+        ...init,
+        headers: {
+          ...headers,
+          ...(init?.headers || {}),
+        },
       });
-      
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Network error' }));
+        const error = await response.json().catch(() => ({ message: "Network error" }));
         throw new Error(error.message || `HTTP ${response.status}`);
       }
-      
+
       return response.json();
     },
-    
-    async get(url: string) {
+
+    // ✅ POST requests
+    async post(url: string, data: any, init?: RequestInit) {
+      const headers = await getAuthHeaders();
       const response = await fetch(url, {
-        method: 'GET',
-        headers
+        ...init,
+        method: "POST",
+        headers: {
+          ...headers,
+          ...(init?.headers || {}),
+        },
+        body: JSON.stringify(data),
       });
-      
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Network error' }));
+        const error = await response.json().catch(() => ({ message: "Network error" }));
         throw new Error(error.message || `HTTP ${response.status}`);
       }
-      
+
       return response.json();
-    }
+    },
   };
 }

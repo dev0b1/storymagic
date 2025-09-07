@@ -15,7 +15,8 @@ export function hasValidApiKeys() {
     openAI: !!(config.openAiApiKey && !config.openAiApiKey.includes('your_key')),
     supabase: !!(config.supabaseUrl && config.supabaseServiceRoleKey && 
                 !config.supabaseUrl.includes('your-project') && 
-                !config.supabaseServiceRoleKey.includes('your_key'))
+                !config.supabaseServiceRoleKey.includes('your_key')),
+    cartesian: !!(process.env.CARTESIAN_API_KEY && !process.env.CARTESIAN_API_KEY.includes('your_key')),  
   };
 }
 

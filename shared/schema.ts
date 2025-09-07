@@ -46,7 +46,6 @@ export const stories = pgTable("stories", {
   story_id: text("story_id"),
   used_fallback: boolean("used_fallback").default(false),
   audio_url: text("audio_url"),
-  audio_provider: text("audio_provider"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });
