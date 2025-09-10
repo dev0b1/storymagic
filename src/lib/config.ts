@@ -6,6 +6,7 @@ export const config = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   databaseUrl: process.env.DATABASE_URL,
+  cartesiaApiKey:process.env.CARTESIA_API_KEY,
 };
 
 export function hasValidApiKeys() {
@@ -16,7 +17,7 @@ export function hasValidApiKeys() {
     supabase: !!(config.supabaseUrl && config.supabaseServiceRoleKey && 
                 !config.supabaseUrl.includes('your-project') && 
                 !config.supabaseServiceRoleKey.includes('your_key')),
-    cartesian: !!(process.env.CARTESIAN_API_KEY && !process.env.CARTESIAN_API_KEY.includes('your_key')),  
+    cartesian: !!(config.cartesiaApiKey && !config.cartesiaApiKey.includes('your_key')), 
   };
 }
 

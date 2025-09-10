@@ -144,13 +144,8 @@ export function SystemMessage({
       const headers = await buildAuthHeaders({ userId: userId || undefined });
        
       console.log("Generating audio with headers:", headers);
-      const response = await apiClient.post(`/api/story/${storyId}/audio?withMusic=true`,{})
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(errorData.message || `Server error: ${response.status}`);
-      }
+      const data = await apiClient.post(`/api/story/${storyId}/audio?withMusic=true`,{})
       
-      const data = await response.json();
       
       if (data.audioUrl && data.audioUrl !== 'browser-tts') {
         setAudioState(prev => ({ 

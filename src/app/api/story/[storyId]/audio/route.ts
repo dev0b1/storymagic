@@ -1,56 +1,63 @@
 import { NextResponse } from "next/server";
 import { DatabaseService } from "@/lib/database-service";
-import { requireSupabaseUser } from "@/lib/server-auth";
+import { requireSupabaseUser, supabaseAdmin } from "@/lib/server-auth";
 import { config, hasValidApiKeys } from "@/lib/config";
-import { supabase } from "@/lib/supabase"; // make sure you have supabase client here
 import { eq } from "drizzle-orm";
 import { stories } from "@shared/schema";
-import {db} from "@/lib/db";
-import {cartesianClient} from @cartesian/cartesian-js
+import { db } from "@/lib/db";
+import { CartesiaClient } from "@cartesia/cartesia-js";
 
+// ✅ Convert response to Buffer (supports fetch responses or raw bytes)
+const generateAudioUrl = async (response: any) => {
+  if (response?.arrayBuffer) {
+    const audioBuffer = await response.arrayBuffer();
+    return Buffer.from(audioBuffer);
+  }
+  return Buffer.from(response); // handles Uint8Array or Buffer
+};
 
-
-//define cartesian api
-const cartesianAudio = async(data:string)=>{
+// ✅ Cartesian TTS wrapper
+const cartesianAudio = async (data: string) => {
   const apiKeys = hasValidApiKeys();
-  if(!apiKeys.cartesian){
+  if (!apiKeys.cartesian) {
     throw new Error("Cartesian API key not configured");
   }
-  const client = cartesianClient({
-    apiKey: process.env.CARTESIAN_API_KEY,
-  })
+
+  const client = new CartesiaClient({
+    apiKey: process.env.CARTESIA_API_KEY!,
+  });
+
+  // Call Cartesia API
   const response = await client.tts.bytes({
-  modelId: "sonic-2",
-  voice: {
-    mode: "id",
-    id: "694f9389-aac1-45b6-b726-9d9369183238",
-  },
-  outputFormat: {
-    container: "wav",
-    encoding: "pcm_f32le",
-    sampleRate: 44100,
-  },
-  transcript: data
-});
+    modelId: "sonic-2",
+    voice: {
+      mode: "id",
+      id: "694f9389-aac1-45b6-b726-9d9369183238",
+    },
+    outputFormat: {
+      container: "mp3", // 🔄 match your Supabase upload type
+      sampleRate: 44100,
+      bitRate: 192000,
+    },
+    transcript: data,
+  });
 
-}
+  return response;
+};
 
-
-
-
-///post request handler
+// ✅ POST request handler
 export async function POST(
   req: Request,
-  { params }: { params: { storyId: string } }
+  { params }: { params: Promise<{ storyId: string }> } // 👈 must be Promise
 ) {
   try {
-    // ✅ Ensure the user is logged in
+    // Ensure the user is logged in
     const user = await requireSupabaseUser(req);
     if (!user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { storyId } = params;
+    const { storyId } = await params; // 👈 await here
     if (!storyId) {
       return NextResponse.json(
         { message: "Story ID is required" },
@@ -60,7 +67,7 @@ export async function POST(
 
     console.log("🎵 Audio generation request for story:", storyId);
 
-    // ✅ Load the story
+    // Load the story
     const userStories = await DatabaseService.getUserStories(user.id, 100);
     const story = userStories.find((s) => s.id === storyId);
 
@@ -68,12 +75,12 @@ export async function POST(
       return NextResponse.json({ message: "Story not found" }, { status: 404 });
     }
 
-    // ✅ Make sure the logged-in user owns this story
+    // Ensure user owns this story
     if (story.user_id !== user.id) {
       return NextResponse.json({ message: "Access denied" }, { status: 403 });
     }
 
-    // ✅ Check API keys
+    // Check API keys
     const apiKeys = hasValidApiKeys();
     if (!apiKeys.elevenLabs) {
       console.log("⚠️ ElevenLabs API key not configured, using browser TTS");
@@ -83,7 +90,8 @@ export async function POST(
       });
     }
 
-    // ✅ Generate audio using ElevenLabs
+
+    // Generate audio using ElevenLabs
     const elevenLabsResponse = await fetch(
       "https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB",
       {
@@ -104,33 +112,29 @@ export async function POST(
       }
     );
 
-    if (!elevenLabsResponse.ok) {
+    let audioFile;
 
-      //fallback to cartesian tts
-      alert("Elevenlabs tts failed, falling back to cartesian tts")
-      try{
-        cartesianAudio(story.output_story)
-      }
-      catch(error){
+    if (!elevenLabsResponse.ok) {
+      console.warn("⚠️ ElevenLabs TTS failed, falling back to Cartesian TTS");
+      try {
+        const cartesianResponse = await cartesianAudio(story.output_story);
+        audioFile = await generateAudioUrl(cartesianResponse);
+      } catch (error) {
         console.error("❌ Cartesian TTS also failed:", error);
         throw new Error("Both ElevenLabs and Cartesian TTS failed");
       }
-      // const errorText = await elevenLabsResponse.text();
-      // console.error("❌ ElevenLabs API error:", elevenLabsResponse.status, errorText);
-      // throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status}`);
+    } else {
+      audioFile = await generateAudioUrl(elevenLabsResponse);
     }
 
-    // ✅ Get audio as ArrayBuffer
-    const audioBuffer = await elevenLabsResponse.arrayBuffer();
-    const audioFile = Buffer.from(audioBuffer);
-
-    // ✅ Upload audio file to Supabase Storage under user folder
+    // Upload audio file to Supabase Storage under user folder
     const filePath = `stories/${user.id}/${storyId}.mp3`;
-    const { error: uploadError } = await supabase.storage
-      .from("audios") // bucket name (create in Supabase dashboard)
+    console.log(filePath);
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("audios")
       .upload(filePath, audioFile, {
         contentType: "audio/mpeg",
-        upsert: true, // overwrite if regenerating
+        upsert: true,
       });
 
     if (uploadError) {
@@ -138,14 +142,14 @@ export async function POST(
       throw new Error("Failed to upload audio to storage");
     }
 
-    // ✅ Get a public URL for playback
-    const { data: publicData } = supabase.storage
+    // Get a public URL for playback
+    const { data: publicData } = supabaseAdmin.storage
       .from("audios")
       .getPublicUrl(filePath);
 
     const audioUrl = publicData.publicUrl;
 
-    // ✅ Update story with audio_url in DB
+    // Update story with audio_url in DB
     await db
       .update(stories)
       .set({ audio_url: audioUrl })
