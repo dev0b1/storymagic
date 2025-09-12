@@ -1,14 +1,15 @@
 import { db } from '@/lib/db';
-import { users, stories } from '@shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { user_profiles, documents, flashcards, study_sessions } from '@shared/schema';
+import { eq, desc, and } from 'drizzle-orm';
 
 export class DatabaseService {
   static async validateDatabase(): Promise<boolean> {
     try {
       console.log('Validating database connection...');
       // Simple selects to ensure tables exist
-      await db.select().from(users).limit(1);
-      await db.select().from(stories).limit(1);
+      await db.select().from(user_profiles).limit(1);
+      await db.select().from(documents).limit(1);
+      await db.select().from(flashcards).limit(1);
       console.log('Database validation successful');
       return true;
     } catch (error) {
@@ -17,80 +18,153 @@ export class DatabaseService {
     }
   }
 
-  static async getUser(userId: string) {
+  static async getUserProfile(userId: string) {
     try {
-      const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const rows = await db.select().from(user_profiles).where(eq(user_profiles.id, userId)).limit(1);
       return rows[0] || null;
     } catch (error) {
-      console.error('Error fetching user:', error);
-      throw new Error(`Failed to fetch user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error fetching user profile:', error);
+      throw new Error(`Failed to fetch user profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  static async getUserByEmail(email: string) {
-    const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  static async getUserProfileByEmail(email: string) {
+    const rows = await db.select().from(user_profiles).where(eq(user_profiles.email, email)).limit(1);
     return rows[0] || null;
   }
 
-  static async getUserStories(userId: string, limit: number = 50) {
+  static async getUserDocuments(userId: string, limit: number = 50) {
     try {
       const rows = await db
         .select()
-        .from(stories)
-        .where(eq(stories.user_id, userId))
-        .orderBy(desc(stories.created_at))
+        .from(documents)
+        .where(eq(documents.user_id, userId))
+        .orderBy(desc(documents.created_at))
         .limit(limit);
       return rows;
     } catch (error) {
-      console.error('Error fetching user stories:', error);
-      throw new Error(`Failed to fetch user stories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error fetching user documents:', error);
+      throw new Error(`Failed to fetch user documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  static async createStory(input: {
+  static async getUserFlashcards(userId: string, limit: number = 100) {
+    try {
+      const rows = await db
+        .select()
+        .from(flashcards)
+        .where(eq(flashcards.user_id, userId))
+        .orderBy(desc(flashcards.created_at))
+        .limit(limit);
+      return rows;
+    } catch (error) {
+      console.error('Error fetching user flashcards:', error);
+      throw new Error(`Failed to fetch user flashcards: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async getFlashcardsByDocument(documentId: string, userId: string) {
+    try {
+      const rows = await db
+        .select()
+        .from(flashcards)
+        .where(and(eq(flashcards.document_id, documentId), eq(flashcards.user_id, userId)))
+        .orderBy(desc(flashcards.created_at));
+      return rows;
+    } catch (error) {
+      console.error('Error fetching flashcards by document:', error);
+      throw new Error(`Failed to fetch flashcards: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async createDocument(input: {
     user_id: string;
-    input_text: string;
-    output_story: string | null;
-    narration_mode: string;
-    source: 'api' | 'pdf';
+    title: string;
+    file_name: string;
+    file_url: string;
+    file_size?: number;
+    content_type?: string;
+    extracted_text?: string;
+    summary?: string;
+    processing_status?: string;
   }) {
     try {
-      // Ensure output_story is not null for database insertion
-      const storyData = {
-        ...input,
-        output_story: input.output_story || 'Story generation failed'
-      };
-      const [row] = await db.insert(stories).values(storyData).returning();
+      const [row] = await db.insert(documents).values(input).returning();
       return row || null;
     } catch (error) {
-      console.error('Error creating story:', error);
-      throw new Error(`Failed to create story: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error creating document:', error);
+      throw new Error(`Failed to create document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  static async createUser(input: {
+  static async updateDocument(documentId: string, updates: Partial<typeof documents.$inferSelect>) {
+    try {
+      const [row] = await db.update(documents).set(updates).where(eq(documents.id, documentId)).returning();
+      return row || null;
+    } catch (error) {
+      console.error('Error updating document:', error);
+      throw new Error(`Failed to update document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async createFlashcard(input: {
+    document_id: string;
+    user_id: string;
+    front: string;
+    back: string;
+    hint?: string;
+    difficulty?: string;
+    category?: string;
+  }) {
+    try {
+      const [row] = await db.insert(flashcards).values(input).returning();
+      return row || null;
+    } catch (error) {
+      console.error('Error creating flashcard:', error);
+      throw new Error(`Failed to create flashcard: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async createStudySession(input: {
+    user_id: string;
+    document_id?: string;
+    session_type?: string;
+    cards_studied?: number;
+    correct_answers?: number;
+    session_duration?: number;
+  }) {
+    try {
+      const [row] = await db.insert(study_sessions).values(input).returning();
+      return row || null;
+    } catch (error) {
+      console.error('Error creating study session:', error);
+      throw new Error(`Failed to create study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async createUserProfile(input: {
     id: string;
     email: string;
-    name: string;
-    is_premium: boolean;
-    stories_generated: number;
+    name?: string;
+    is_premium?: boolean;
+    documents_processed?: number;
   }) {
     try {
-      const [row] = await db.insert(users).values(input).returning();
+      const [row] = await db.insert(user_profiles).values(input).returning();
       return row || null;
     } catch (error) {
-      console.error('Error creating user:', error);
-      throw new Error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error creating user profile:', error);
+      throw new Error(`Failed to create user profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  static async updateUser(userId: string, updates: Partial<typeof users.$inferSelect>) {
+  static async updateUserProfile(userId: string, updates: Partial<typeof user_profiles.$inferSelect>) {
     try {
-      const [row] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
+      const [row] = await db.update(user_profiles).set(updates).where(eq(user_profiles.id, userId)).returning();
       return row || null;
     } catch (error) {
-      console.error('Error updating user:', error);
-      throw new Error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error updating user profile:', error);
+      throw new Error(`Failed to update user profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

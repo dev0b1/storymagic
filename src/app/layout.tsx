@@ -7,8 +7,8 @@ import { AuthProvider } from "@/context/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "StoryMagic - AI-Powered Story Generation",
-  description: "Transform your ideas into captivating stories with AI-powered narration and multi-voice podcasts.",
+  title: "StudyFlow - AI-Powered PDF to Flashcards",
+  description: "Transform your PDFs into interactive flashcards and summaries for efficient studying. Perfect for students and professionals.",
 };
 
 export default function RootLayout({

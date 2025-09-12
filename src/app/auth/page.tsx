@@ -2,7 +2,7 @@
 
 import { useState, useEffect, MouseEventHandler } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sparkles, X } from 'lucide-react';
+import { Brain, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -43,7 +43,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-indigo-50 relative flex items-center justify-center p-4">
       <div className="relative z-10 bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-200">
         <Link href="/">
           <Button variant="ghost" size="sm" className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
@@ -52,11 +52,11 @@ export default function AuthPage() {
         </Link>
 
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <Sparkles className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 bg-gradient-to-br from-green-600 via-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Brain className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to StoryMagic</h3>
-          <p className="text-gray-600">Sign in with Google to continue</p>
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to StudyFlow</h3>
+          <p className="text-gray-600">Sign in with Google to start studying smarter</p>
         </div>
 
         <div className="space-y-4">
@@ -87,7 +87,7 @@ export default function AuthPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          No passwords needed - just pure magic ✨
+          No passwords needed - just smart studying 🧠
         </p>
       </div>
     </div>
