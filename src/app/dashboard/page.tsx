@@ -306,7 +306,7 @@ export default function DashboardPage() {
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
         onUpgrade={() => {}} // TODO: Implement upgrade functionality
-        userEmail={user?.email || 'guest@storymagic.app'}
+        userEmail={user?.email}
         isPremium={false} // TODO: Get from user data
         storiesGenerated={0} // TODO: Get from user data
       />
